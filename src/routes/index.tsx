@@ -139,6 +139,27 @@ function LoginPage() {
 
           <form onSubmit={handleSignIn} className="space-y-5">
             <div className="space-y-2">
+              <Label htmlFor="role" className="text-sm font-semibold">
+                Login As
+              </Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger id="role" className="h-12">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="Select your role" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-semibold">
                 State Email
               </Label>
