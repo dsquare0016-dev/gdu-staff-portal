@@ -1,13 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Mail, Lock, Eye, EyeOff, ShieldCheck, Landmark, Star } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, Landmark, Star, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import loginRef from "@/assets/login-reference.png";
+import loginBg from "@/assets/login-bg.jpg";
+
+const ROLES = [
+  { value: "staff", label: "Staff" },
+  { value: "accounts", label: "Accounts Officer" },
+  { value: "admin", label: "Administrator" },
+  { value: "dg", label: "Director General" },
+  { value: "ta", label: "Technical Adviser" },
+  { value: "ict", label: "ICT Support" },
+  { value: "super_admin", label: "Super Admin" },
+];
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,6 +42,7 @@ export const Route = createFileRoute("/")({
 function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("staff");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,9 +66,9 @@ function LoginPage() {
         aria-label="Kogi State Government Delivery Unit"
         className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-primary text-primary-foreground"
         style={{
-          backgroundImage: `linear-gradient(135deg, oklch(0.22 0.09 263 / 0.92), oklch(0.18 0.08 263 / 0.96)), url(${loginRef})`,
-          backgroundSize: "200% 100%, cover",
-          backgroundPosition: "left center, left center",
+          backgroundImage: `linear-gradient(135deg, oklch(0.22 0.09 263 / 0.85), oklch(0.18 0.08 263 / 0.92)), url(${loginBg})`,
+          backgroundSize: "cover, cover",
+          backgroundPosition: "center, center",
         }}
       >
         {/* Gold diagonal divider on the right edge */}
@@ -126,6 +138,27 @@ function LoginPage() {
           </header>
 
           <form onSubmit={handleSignIn} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="role" className="text-sm font-semibold">
+                Login As
+              </Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger id="role" className="h-12">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="Select your role" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-semibold">
                 State Email
