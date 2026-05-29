@@ -245,7 +245,7 @@ function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-12 text-base font-semibold border-2 border-primary text-primary hover:bg-primary/5"
+              className="w-full h-12 rounded-full text-base font-semibold border-2 border-primary text-primary hover:bg-primary/5"
             >
               <Landmark className="mr-2 h-5 w-5" />
               HOME PAGE
