@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Mail, Lock, Eye, EyeOff, ShieldCheck, Landmark, Star, Users } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ShieldCheck, Landmark, Star, User, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,18 +113,23 @@ function LoginPage() {
       {/* Right form panel */}
       <section className="flex items-center justify-center px-6 py-12 sm:px-12 bg-background">
         <div className="w-full max-w-md">
-          {/* Shield icon */}
-          <div className="flex justify-center mb-8">
-            <div className="relative">
-              <ShieldCheck
-                className="h-16 w-16 text-primary"
-                strokeWidth={1.5}
-              />
-              <div
+          {/* Hexagonal badge with user icon */}
+          <div className="flex justify-center mb-6">
+            <div className="relative h-16 w-14 flex items-center justify-center">
+              <svg
+                viewBox="0 0 56 64"
+                className="absolute inset-0 h-full w-full"
                 aria-hidden
-                className="absolute inset-x-2 -bottom-1 h-1 rounded-full"
-                style={{ background: "var(--gradient-gold)" }}
-              />
+              >
+                <polygon
+                  points="28,2 53,16 53,48 28,62 3,48 3,16"
+                  fill="oklch(0.24 0.09 263)"
+                  stroke="var(--color-gold)"
+                  strokeWidth="1.5"
+                />
+                <line x1="6" y1="18" x2="6" y2="46" stroke="var(--color-gold)" strokeWidth="2" />
+              </svg>
+              <User className="relative h-6 w-6 text-white" strokeWidth={2} />
             </div>
           </div>
 
@@ -140,12 +145,12 @@ function LoginPage() {
           <form onSubmit={handleSignIn} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="role" className="text-sm font-semibold">
-                Login As
+                User Role
               </Label>
               <Select value={role} onValueChange={setRole}>
-                <SelectTrigger id="role" className="h-12">
+                <SelectTrigger id="role" className="h-12 rounded-full px-4">
                   <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <Shield className="h-4 w-4 text-muted-foreground" />
                     <SelectValue placeholder="Select your role" />
                   </div>
                 </SelectTrigger>
@@ -173,7 +178,7 @@ function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@kogi-state.gov.ng"
-                  className="pl-10 h-12"
+                  className="pl-10 h-12 rounded-full"
                 />
               </div>
             </div>
@@ -192,7 +197,7 @@ function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="pl-10 pr-10 h-12"
+                  className="pl-10 pr-10 h-12 rounded-full"
                 />
                 <button
                   type="button"
@@ -224,7 +229,7 @@ function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 shadow-[var(--shadow-elegant)]"
+              className="w-full h-12 rounded-full text-base font-semibold bg-primary hover:bg-primary/90 shadow-[var(--shadow-elegant)]"
             >
               {loading ? "Signing in…" : "Sign In"}
             </Button>
@@ -240,7 +245,7 @@ function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full h-12 text-base font-semibold border-2 border-primary text-primary hover:bg-primary/5"
+              className="w-full h-12 rounded-full text-base font-semibold border-2 border-primary text-primary hover:bg-primary/5"
             >
               <Landmark className="mr-2 h-5 w-5" />
               HOME PAGE
