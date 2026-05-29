@@ -178,7 +178,7 @@ function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@kogi-state.gov.ng"
-                  className="pl-10 h-12"
+                  className="pl-10 h-12 rounded-full"
                 />
               </div>
             </div>
@@ -197,7 +197,7 @@ function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="pl-10 pr-10 h-12"
+                  className="pl-10 pr-10 h-12 rounded-full"
                 />
                 <button
                   type="button"
@@ -229,7 +229,7 @@ function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 shadow-[var(--shadow-elegant)]"
+              className="w-full h-12 rounded-full text-base font-semibold bg-primary hover:bg-primary/90 shadow-[var(--shadow-elegant)]"
             >
               {loading ? "Signing in…" : "Sign In"}
             </Button>
