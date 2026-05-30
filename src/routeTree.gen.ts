@@ -10,33 +10,206 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardStaffRouteImport } from './routes/dashboard/staff'
+import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
+import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
+import { Route as DashboardPayrollRouteImport } from './routes/dashboard/payroll'
+import { Route as DashboardOrganogramRouteImport } from './routes/dashboard/organogram'
+import { Route as DashboardNominalRollRouteImport } from './routes/dashboard/nominal-roll'
+import { Route as DashboardDocumentsRouteImport } from './routes/dashboard/documents'
+import { Route as DashboardDepartmentsRouteImport } from './routes/dashboard/departments'
+import { Route as DashboardChatRouteImport } from './routes/dashboard/chat'
+import { Route as DashboardAttendanceRouteImport } from './routes/dashboard/attendance'
+import { Route as DashboardAnnouncementsRouteImport } from './routes/dashboard/announcements'
+import { Route as DashboardAiAssistantRouteImport } from './routes/dashboard/ai-assistant'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/dashboard/',
+  path: '/dashboard/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardStaffRoute = DashboardStaffRouteImport.update({
+  id: '/dashboard/staff',
+  path: '/dashboard/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
+  id: '/dashboard/settings',
+  path: '/dashboard/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardReportsRoute = DashboardReportsRouteImport.update({
+  id: '/dashboard/reports',
+  path: '/dashboard/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardPayrollRoute = DashboardPayrollRouteImport.update({
+  id: '/dashboard/payroll',
+  path: '/dashboard/payroll',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardOrganogramRoute = DashboardOrganogramRouteImport.update({
+  id: '/dashboard/organogram',
+  path: '/dashboard/organogram',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardNominalRollRoute = DashboardNominalRollRouteImport.update({
+  id: '/dashboard/nominal-roll',
+  path: '/dashboard/nominal-roll',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardDocumentsRoute = DashboardDocumentsRouteImport.update({
+  id: '/dashboard/documents',
+  path: '/dashboard/documents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardDepartmentsRoute = DashboardDepartmentsRouteImport.update({
+  id: '/dashboard/departments',
+  path: '/dashboard/departments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardChatRoute = DashboardChatRouteImport.update({
+  id: '/dashboard/chat',
+  path: '/dashboard/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAttendanceRoute = DashboardAttendanceRouteImport.update({
+  id: '/dashboard/attendance',
+  path: '/dashboard/attendance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAnnouncementsRoute = DashboardAnnouncementsRouteImport.update({
+  id: '/dashboard/announcements',
+  path: '/dashboard/announcements',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardAiAssistantRoute = DashboardAiAssistantRouteImport.update({
+  id: '/dashboard/ai-assistant',
+  path: '/dashboard/ai-assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
+  '/dashboard/announcements': typeof DashboardAnnouncementsRoute
+  '/dashboard/attendance': typeof DashboardAttendanceRoute
+  '/dashboard/chat': typeof DashboardChatRoute
+  '/dashboard/departments': typeof DashboardDepartmentsRoute
+  '/dashboard/documents': typeof DashboardDocumentsRoute
+  '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
+  '/dashboard/organogram': typeof DashboardOrganogramRoute
+  '/dashboard/payroll': typeof DashboardPayrollRoute
+  '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/staff': typeof DashboardStaffRoute
+  '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
+  '/dashboard/announcements': typeof DashboardAnnouncementsRoute
+  '/dashboard/attendance': typeof DashboardAttendanceRoute
+  '/dashboard/chat': typeof DashboardChatRoute
+  '/dashboard/departments': typeof DashboardDepartmentsRoute
+  '/dashboard/documents': typeof DashboardDocumentsRoute
+  '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
+  '/dashboard/organogram': typeof DashboardOrganogramRoute
+  '/dashboard/payroll': typeof DashboardPayrollRoute
+  '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/staff': typeof DashboardStaffRoute
+  '/dashboard': typeof DashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
+  '/dashboard/announcements': typeof DashboardAnnouncementsRoute
+  '/dashboard/attendance': typeof DashboardAttendanceRoute
+  '/dashboard/chat': typeof DashboardChatRoute
+  '/dashboard/departments': typeof DashboardDepartmentsRoute
+  '/dashboard/documents': typeof DashboardDocumentsRoute
+  '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
+  '/dashboard/organogram': typeof DashboardOrganogramRoute
+  '/dashboard/payroll': typeof DashboardPayrollRoute
+  '/dashboard/reports': typeof DashboardReportsRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/staff': typeof DashboardStaffRoute
+  '/dashboard/': typeof DashboardIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/dashboard/ai-assistant'
+    | '/dashboard/announcements'
+    | '/dashboard/attendance'
+    | '/dashboard/chat'
+    | '/dashboard/departments'
+    | '/dashboard/documents'
+    | '/dashboard/nominal-roll'
+    | '/dashboard/organogram'
+    | '/dashboard/payroll'
+    | '/dashboard/reports'
+    | '/dashboard/settings'
+    | '/dashboard/staff'
+    | '/dashboard/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/dashboard/ai-assistant'
+    | '/dashboard/announcements'
+    | '/dashboard/attendance'
+    | '/dashboard/chat'
+    | '/dashboard/departments'
+    | '/dashboard/documents'
+    | '/dashboard/nominal-roll'
+    | '/dashboard/organogram'
+    | '/dashboard/payroll'
+    | '/dashboard/reports'
+    | '/dashboard/settings'
+    | '/dashboard/staff'
+    | '/dashboard'
+  id:
+    | '__root__'
+    | '/'
+    | '/dashboard/ai-assistant'
+    | '/dashboard/announcements'
+    | '/dashboard/attendance'
+    | '/dashboard/chat'
+    | '/dashboard/departments'
+    | '/dashboard/documents'
+    | '/dashboard/nominal-roll'
+    | '/dashboard/organogram'
+    | '/dashboard/payroll'
+    | '/dashboard/reports'
+    | '/dashboard/settings'
+    | '/dashboard/staff'
+    | '/dashboard/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardAiAssistantRoute: typeof DashboardAiAssistantRoute
+  DashboardAnnouncementsRoute: typeof DashboardAnnouncementsRoute
+  DashboardAttendanceRoute: typeof DashboardAttendanceRoute
+  DashboardChatRoute: typeof DashboardChatRoute
+  DashboardDepartmentsRoute: typeof DashboardDepartmentsRoute
+  DashboardDocumentsRoute: typeof DashboardDocumentsRoute
+  DashboardNominalRollRoute: typeof DashboardNominalRollRoute
+  DashboardOrganogramRoute: typeof DashboardOrganogramRoute
+  DashboardPayrollRoute: typeof DashboardPayrollRoute
+  DashboardReportsRoute: typeof DashboardReportsRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardStaffRoute: typeof DashboardStaffRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,12 +221,126 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/dashboard'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/staff': {
+      id: '/dashboard/staff'
+      path: '/dashboard/staff'
+      fullPath: '/dashboard/staff'
+      preLoaderRoute: typeof DashboardStaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
+      path: '/dashboard/settings'
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/reports': {
+      id: '/dashboard/reports'
+      path: '/dashboard/reports'
+      fullPath: '/dashboard/reports'
+      preLoaderRoute: typeof DashboardReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/payroll': {
+      id: '/dashboard/payroll'
+      path: '/dashboard/payroll'
+      fullPath: '/dashboard/payroll'
+      preLoaderRoute: typeof DashboardPayrollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/organogram': {
+      id: '/dashboard/organogram'
+      path: '/dashboard/organogram'
+      fullPath: '/dashboard/organogram'
+      preLoaderRoute: typeof DashboardOrganogramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/nominal-roll': {
+      id: '/dashboard/nominal-roll'
+      path: '/dashboard/nominal-roll'
+      fullPath: '/dashboard/nominal-roll'
+      preLoaderRoute: typeof DashboardNominalRollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/documents': {
+      id: '/dashboard/documents'
+      path: '/dashboard/documents'
+      fullPath: '/dashboard/documents'
+      preLoaderRoute: typeof DashboardDocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/departments': {
+      id: '/dashboard/departments'
+      path: '/dashboard/departments'
+      fullPath: '/dashboard/departments'
+      preLoaderRoute: typeof DashboardDepartmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/chat': {
+      id: '/dashboard/chat'
+      path: '/dashboard/chat'
+      fullPath: '/dashboard/chat'
+      preLoaderRoute: typeof DashboardChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/attendance': {
+      id: '/dashboard/attendance'
+      path: '/dashboard/attendance'
+      fullPath: '/dashboard/attendance'
+      preLoaderRoute: typeof DashboardAttendanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/announcements': {
+      id: '/dashboard/announcements'
+      path: '/dashboard/announcements'
+      fullPath: '/dashboard/announcements'
+      preLoaderRoute: typeof DashboardAnnouncementsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/ai-assistant': {
+      id: '/dashboard/ai-assistant'
+      path: '/dashboard/ai-assistant'
+      fullPath: '/dashboard/ai-assistant'
+      preLoaderRoute: typeof DashboardAiAssistantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardAiAssistantRoute: DashboardAiAssistantRoute,
+  DashboardAnnouncementsRoute: DashboardAnnouncementsRoute,
+  DashboardAttendanceRoute: DashboardAttendanceRoute,
+  DashboardChatRoute: DashboardChatRoute,
+  DashboardDepartmentsRoute: DashboardDepartmentsRoute,
+  DashboardDocumentsRoute: DashboardDocumentsRoute,
+  DashboardNominalRollRoute: DashboardNominalRollRoute,
+  DashboardOrganogramRoute: DashboardOrganogramRoute,
+  DashboardPayrollRoute: DashboardPayrollRoute,
+  DashboardReportsRoute: DashboardReportsRoute,
+  DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardStaffRoute: DashboardStaffRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

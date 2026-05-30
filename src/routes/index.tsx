@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, Landmark, Star, User, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/hooks/use-auth";
 import { toast } from "sonner";
 import loginBg from "@/assets/login-bg.jpg";
+import type { UserRole } from "@/types";
 
 const ROLES = [
   { value: "staff", label: "Staff" },
@@ -42,21 +44,34 @@ export const Route = createFileRoute("/")({
 function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("staff");
+  const [role, setRole] = useState<UserRole>("staff");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { profile, signIn } = useAuth();
+  const navigate = useNavigate();
+
+  // If already logged in, redirect to dashboard
+  useEffect(() => {
+    if (profile) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [profile, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    const { error } = await signIn(email, password, role);
     setLoading(false);
+    
     if (error) {
       toast.error(error.message);
       return;
     }
+
     toast.success("Welcome back");
+    navigate({ to: "/dashboard" });
   };
 
   return (
