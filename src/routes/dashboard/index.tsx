@@ -30,7 +30,44 @@ export const Route = createFileRoute('/dashboard/')({
   component: DashboardPage,
 });
 
-// ... (mock data remains same)
+const attendanceData = [
+  { name: 'Mon', present: 142, absent: 8, late: 6 },
+  { name: 'Tue', present: 145, absent: 5, late: 6 },
+  { name: 'Wed', present: 138, absent: 12, late: 6 },
+  { name: 'Thu', present: 148, absent: 4, late: 4 },
+  { name: 'Fri', present: 140, absent: 10, late: 6 },
+];
+
+const staffDistribution = [
+  { name: 'Administration', value: 35, color: '#1e3a8a' },
+  { name: 'Finance', value: 25, color: '#b45309' },
+  { name: 'Operations', value: 45, color: '#15803d' },
+  { name: 'ICT', value: 18, color: '#7e22ce' },
+  { name: 'HR', value: 15, color: '#be185d' },
+  { name: 'Others', value: 18, color: '#334155' },
+];
+
+const monthlyPayroll = [
+  { name: 'Jan', value: 45000000 },
+  { name: 'Feb', value: 48000000 },
+  { name: 'Mar', value: 52000000 },
+  { name: 'Apr', value: 49000000 },
+  { name: 'May', value: 55000000 },
+];
+
+const recentActivities = [
+  { id: '1', user: 'Adebayo Johnson', action: 'marked attendance', time: '5 mins ago', avatar: '' },
+  { id: '2', user: 'Grace Okonkwo', action: 'processed payroll', time: '1 hour ago', avatar: '' },
+  { id: '3', user: 'Emmanuel Obi', action: 'uploaded a document', time: '2 hours ago', avatar: '' },
+  { id: '4', user: 'Fatima Bello', action: 'applied for leave', time: '3 hours ago', avatar: '' },
+  { id: '5', user: 'Chidi Okafor', action: 'updated staff record', time: '5 hours ago', avatar: '' },
+];
+
+const pendingApprovals = [
+  { id: '1', type: 'Leave Request', staff: 'Chidi Okafor', date: '2026-05-30' },
+  { id: '2', type: 'Document Approval', staff: 'Amina Ibrahim', date: '2026-05-29' },
+  { id: '3', type: 'Payroll Adjustment', staff: 'Multiple', date: '2026-05-28' },
+];
 
 function DashboardPage() {
   const { profile, isSuperAdmin, isAdmin, isAccounts, isDirector } = useAuth();
