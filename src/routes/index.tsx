@@ -104,7 +104,7 @@ function LoginPage() {
   const heroSubtitle = branding?.hero_subtitle || "KOGI STATE GOVERNMENT";
   const heroTagline = branding?.hero_tagline || "…Confluence of Opportunities";
   const footerText = branding?.footer_text || "© 2025 Kogi State Government. All rights reserved.";
-  const loginTitle = loginSettings?.title || "Sign in to the GDU Admin Page";
+  const loginTitle = loginSettings?.title || "GDU staff Login section";
   const loginSubtitle = loginSettings?.subtitle || "Access and manage the Government Delivery Unit administration system.";
   const logoUrl = branding?.logo_url || "/logo.png";
   const logoUrl2 = (branding as any)?.logo_url_2 || "/logo.png";

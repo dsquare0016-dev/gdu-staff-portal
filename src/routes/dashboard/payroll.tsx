@@ -60,20 +60,39 @@ import {
   Receipt,
   PiggyBank,
   Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
+  Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AreaChartCard, BarChartCard } from '@/components/dashboard/charts';
 
 export const Route = createFileRoute('/dashboard/payroll')({
   head: () => ({
-    meta: [{ title: 'Payroll & Allowances — GDU Portal' }],
+    meta: [{ title: 'Finance & Accounts — GDU Portal' }],
   }),
   component: PayrollPage,
 });
 
+const mockTransactions = [
+  { id: '1', type: 'income', amount: 150000000, source: 'State Allocation', category: 'Allocation', date: '2026-05-01', status: 'completed' },
+  { id: '2', type: 'expenditure', amount: 55000000, source: 'Staff Salaries', category: 'Payroll', date: '2026-05-25', status: 'completed' },
+  { id: '3', type: 'expenditure', amount: 12000000, source: 'Office Maintenance', category: 'Operations', date: '2026-05-20', status: 'completed' },
+  { id: '4', type: 'income', amount: 5000000, source: 'Grant', category: 'Grant', date: '2026-05-15', status: 'completed' },
+  { id: '5', type: 'expenditure', amount: 8500000, source: 'ICT Infrastructure', category: 'ICT', date: '2026-05-10', status: 'completed' },
+];
+
+const financialTrend = [
+  { name: 'Jan', income: 120000000, expenditure: 80000000 },
+  { name: 'Feb', income: 130000000, expenditure: 85000000 },
+  { name: 'Mar', income: 110000000, expenditure: 95000000 },
+  { name: 'Apr', income: 150000000, expenditure: 90000000 },
+  { name: 'May', income: 155000000, expenditure: 75000000 },
+];
+
 const mockPayroll = [
   {
     id: '1',
-    staff_id: '1',
     staff_name: 'Adebayo Johnson',
     staff_email: 'adebayo.johnson@gdu.gov.ng',
     department: 'Administration',
@@ -88,7 +107,6 @@ const mockPayroll = [
   },
   {
     id: '2',
-    staff_id: '2',
     staff_name: 'Grace Okonkwo',
     staff_email: 'grace.okonkwo@gdu.gov.ng',
     department: 'Finance',
@@ -103,7 +121,6 @@ const mockPayroll = [
   },
   {
     id: '3',
-    staff_id: '3',
     staff_name: 'Emmanuel Obi',
     staff_email: 'emmanuel.obi@gdu.gov.ng',
     department: 'ICT',
@@ -118,7 +135,6 @@ const mockPayroll = [
   },
   {
     id: '4',
-    staff_id: '4',
     staff_name: 'Fatima Bello',
     staff_email: 'fatima.bello@gdu.gov.ng',
     department: 'Operations',
@@ -133,7 +149,6 @@ const mockPayroll = [
   },
   {
     id: '5',
-    staff_id: '5',
     staff_name: 'Chidi Okafor',
     staff_email: 'chidi.okafor@gdu.gov.ng',
     department: 'HR',
@@ -151,7 +166,6 @@ const mockPayroll = [
 const mockAllowances = [
   {
     id: '1',
-    staff_id: '1',
     staff_name: 'Adebayo Johnson',
     type: 'Housing',
     amount: 50000,
@@ -161,7 +175,6 @@ const mockAllowances = [
   },
   {
     id: '2',
-    staff_id: '1',
     staff_name: 'Adebayo Johnson',
     type: 'Transport',
     amount: 30000,
@@ -171,7 +184,6 @@ const mockAllowances = [
   },
   {
     id: '3',
-    staff_id: '1',
     staff_name: 'Adebayo Johnson',
     type: 'Medical',
     amount: 25000,
@@ -181,7 +193,6 @@ const mockAllowances = [
   },
   {
     id: '4',
-    staff_id: '2',
     staff_name: 'Grace Okonkwo',
     type: 'Housing',
     amount: 75000,
@@ -191,7 +202,6 @@ const mockAllowances = [
   },
   {
     id: '5',
-    staff_id: '2',
     staff_name: 'Grace Okonkwo',
     type: 'Transport',
     amount: 45000,
@@ -209,14 +219,17 @@ const months = [
 ];
 
 function PayrollPage() {
-  const { canAccess } = useAuth();
+  const { isAccounts, isSuperAdmin, isDirector, isAdmin, isICT } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [monthFilter, setMonthFilter] = useState('5');
   const [isAddPayrollOpen, setIsAddPayrollOpen] = useState(false);
   const [isAddAllowanceOpen, setIsAddAllowanceOpen] = useState(false);
+  const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
 
-  const canManagePayroll = canAccess('payroll', 'create') || canAccess('payroll', 'edit');
+  const canModify = isAccounts || isSuperAdmin;
+  const canDelete = isSuperAdmin;
+  const canView = isAccounts || isSuperAdmin || isDirector || isAdmin || isICT;
 
   const filteredPayroll = mockPayroll.filter((record) => {
     const matchesSearch =
@@ -238,19 +251,24 @@ function PayrollPage() {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, string> = {
       paid: 'bg-green-500/10 text-green-600 border-green-500/20',
+      completed: 'bg-green-500/10 text-green-600 border-green-500/20',
       pending: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
       failed: 'bg-red-500/10 text-red-600 border-red-500/20',
       cancelled: 'bg-gray-500/10 text-gray-600 border-gray-500/20',
     };
     return (
-      <Badge className={cn('capitalize', variants[status] || '')}>
-        {status === 'paid' && <CheckCircle className="h-3 w-3 mr-1" />}
+      <Badge className={cn('capitalize font-medium', variants[status] || '')}>
+        {status === 'paid' || status === 'completed' ? <CheckCircle className="h-3 w-3 mr-1" /> : null}
         {status === 'pending' && <Clock className="h-3 w-3 mr-1" />}
         {status === 'failed' && <XCircle className="h-3 w-3 mr-1" />}
         {status}
       </Badge>
     );
   };
+
+  const totalIncome = mockTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpenditure = mockTransactions.filter(t => t.type === 'expenditure').reduce((sum, t) => sum + t.amount, 0);
+  const currentBalance = totalIncome - totalExpenditure;
 
   const totalPayroll = mockPayroll.reduce((sum, p) => sum + p.net_salary, 0);
   const pendingPayroll = mockPayroll
@@ -263,131 +281,227 @@ function PayrollPage() {
       <div className="space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Payroll & Allowances</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Finance & Accounts</h1>
             <p className="text-muted-foreground mt-1">
-              Manage staff salaries, wages, and allowances
+              Complete financial management, payroll and transaction tracking
             </p>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline">
               <Download className="mr-2 h-4 w-4" />
-              Export Report
+              Export Financial Report
             </Button>
-            {canManagePayroll && (
-              <>
-                <Dialog open={isAddAllowanceOpen} onOpenChange={setIsAddAllowanceOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Allowance
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Add New Allowance</DialogTitle>
-                      <DialogDescription>Record a new allowance for a staff member.</DialogDescription>
-                    </DialogHeader>
-                    <AllowanceForm onSuccess={() => setIsAddAllowanceOpen(false)} />
-                  </DialogContent>
-                </Dialog>
-                <Dialog open={isAddPayrollOpen} onOpenChange={setIsAddPayrollOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Process Payroll
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Process Payroll</DialogTitle>
-                      <DialogDescription>
-                        Process payroll for the selected month.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <PayrollForm onSuccess={() => setIsAddPayrollOpen(false)} />
-                  </DialogContent>
-                </Dialog>
-              </>
+            {canModify && (
+              <Dialog open={isAddTransactionOpen} onOpenChange={setIsAddTransactionOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-primary hover:bg-primary/90">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Record Transaction
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add New Transaction</DialogTitle>
+                    <DialogDescription>Record income or expenditure into the system.</DialogDescription>
+                  </DialogHeader>
+                  <TransactionForm onSuccess={() => setIsAddTransactionOpen(false)} />
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="border backdrop-blur-sm bg-gradient-to-br from-primary/10 to-primary/5">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Payroll (May)</p>
-                  <p className="text-2xl font-bold">{formatCurrency(totalPayroll)}</p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Wallet className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border backdrop-blur-sm bg-gradient-to-br from-yellow-500/10 to-yellow-500/5">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending Payments</p>
-                  <p className="text-2xl font-bold">{formatCurrency(pendingPayroll)}</p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-yellow-500" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 md:grid-cols-3">
           <Card className="border backdrop-blur-sm bg-gradient-to-br from-green-500/10 to-green-500/5">
-            <CardContent className="p-4">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Allowances</p>
-                  <p className="text-2xl font-bold">{formatCurrency(totalAllowances)}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Total Income</p>
+                  <p className="text-3xl font-bold text-green-600">{formatCurrency(totalIncome)}</p>
+                  <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                    <ArrowUpRight className="h-3 w-3" />
+                    +12% from last month
+                  </p>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-green-500" />
+                <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border backdrop-blur-sm bg-gradient-to-br from-blue-500/10 to-blue-500/5">
-            <CardContent className="p-4">
+          <Card className="border backdrop-blur-sm bg-gradient-to-br from-red-500/10 to-red-500/5">
+            <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Staff Count</p>
-                  <p className="text-2xl font-bold">{mockPayroll.length}</p>
+                  <p className="text-sm font-medium text-muted-foreground">Total Expenditure</p>
+                  <p className="text-3xl font-bold text-red-600">{formatCurrency(totalExpenditure)}</p>
+                  <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
+                    <ArrowDownRight className="h-3 w-3" />
+                    +5% from last month
+                  </p>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <Receipt className="h-5 w-5 text-blue-500" />
+                <div className="h-12 w-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                  <DollarSign className="h-6 w-6 text-red-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border backdrop-blur-sm bg-gradient-to-br from-primary/10 to-primary/5">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Current Balance</p>
+                  <p className="text-3xl font-bold text-primary">{formatCurrency(currentBalance)}</p>
+                  <p className="text-xs text-primary flex items-center gap-1 mt-1">
+                    <Scale className="h-3 w-3" />
+                    Available funds
+                  </p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center">
+                  <PiggyBank className="h-6 w-6 text-primary" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs defaultValue="payroll" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="payroll">Payroll</TabsTrigger>
-            <TabsTrigger value="allowances">Allowances</TabsTrigger>
-            <TabsTrigger value="history">Payment History</TabsTrigger>
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="bg-muted/50 p-1">
+            <TabsTrigger value="overview">Financial Overview</TabsTrigger>
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="payroll">Payroll & Allowances</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="payroll" className="space-y-4">
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <AreaChartCard
+                title="Revenue vs Expenditure"
+                description="Monthly financial trend"
+                data={financialTrend}
+                fill="var(--primary)"
+              />
+              <BarChartCard
+                title="Expense Distribution"
+                description="Spending by category"
+                data={[
+                  { name: 'Payroll', value: 55000000 },
+                  { name: 'Ops', value: 12000000 },
+                  { name: 'ICT', value: 8500000 },
+                  { name: 'Others', value: 5000000 },
+                ]}
+                bars={[{ dataKey: 'value', color: 'var(--primary)', name: 'Amount' }]}
+              />
+            </div>
+            
             <Card className="border backdrop-blur-sm">
-              <CardHeader className="pb-4">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search staff..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
+              <CardHeader>
+                <CardTitle>Recent Transactions</CardTitle>
+                <CardDescription>Latest income and expenditure entries</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Source/Description</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mockTransactions.slice(0, 5).map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="text-muted-foreground">{t.date}</TableCell>
+                        <TableCell className="font-medium">{t.source}</TableCell>
+                        <TableCell>{t.category}</TableCell>
+                        <TableCell>
+                          <Badge variant={t.type === 'income' ? 'secondary' : 'outline'} className={t.type === 'income' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}>
+                            {t.type.toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className={cn("text-right font-bold", t.type === 'income' ? "text-green-600" : "text-red-600")}>
+                          {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="transactions" className="space-y-4">
+            <Card className="border backdrop-blur-sm">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Transaction History</CardTitle>
+                    <CardDescription>Detailed record of all financial movements</CardDescription>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  {canModify && (
+                    <Button variant="outline" size="sm">
+                      <Download className="mr-2 h-4 w-4" />
+                      Download Statement
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Transaction ID</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      {canModify && <TableHead className="text-right">Actions</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mockTransactions.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell>{t.date}</TableCell>
+                        <TableCell className="text-xs font-mono">TXN-{t.id}9283</TableCell>
+                        <TableCell className="font-medium">{t.source}</TableCell>
+                        <TableCell>{t.category}</TableCell>
+                        <TableCell>
+                          <span className={cn("px-2 py-1 rounded text-[10px] font-bold uppercase", t.type === 'income' ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+                            {t.type}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-semibold">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell>{getStatusBadge(t.status)}</TableCell>
+                        {canModify && (
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem className="cursor-pointer">View Receipt</DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer">Edit Details</DropdownMenuItem>
+                                {canDelete && <DropdownMenuItem className="cursor-pointer text-destructive">Delete Transaction</DropdownMenuItem>}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="payroll" className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+               <div className="flex flex-wrap items-center gap-2">
                     <Select value={monthFilter} onValueChange={setMonthFilter}>
                       <SelectTrigger className="w-[150px]">
                         <Calendar className="mr-2 h-4 w-4" />
@@ -401,152 +515,133 @@ function PayrollPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                      <SelectTrigger className="w-[180px]">
-                        <Filter className="mr-2 h-4 w-4" />
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map((dept) => (
-                          <SelectItem key={dept} value={dept}>
-                            {dept}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
+                <div className="flex items-center gap-2">
+                   {canModify && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => setIsAddAllowanceOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" /> Add Allowance
+                      </Button>
+                      <Button size="sm" onClick={() => setIsAddPayrollOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" /> Process Payroll
+                      </Button>
+                    </>
+                   )}
+                </div>
+            </div>
+
+            <Card className="border backdrop-blur-sm">
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff</TableHead>
-                      <TableHead>Department</TableHead>
                       <TableHead>Basic Salary</TableHead>
                       <TableHead>Allowances</TableHead>
                       <TableHead>Deductions</TableHead>
                       <TableHead>Net Salary</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      {canModify && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPayroll.map((record) => (
+                    {mockPayroll.map((record) => (
                       <TableRow key={record.id}>
                         <TableCell>
-                          <div>
-                            <p className="font-medium">{record.staff_name}</p>
-                            <p className="text-xs text-muted-foreground">{record.staff_email}</p>
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs">
+                              {record.staff_name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{record.staff_name}</p>
+                              <p className="text-[10px] text-muted-foreground">{record.department}</p>
+                            </div>
                           </div>
                         </TableCell>
-                        <TableCell>{record.department}</TableCell>
-                        <TableCell>{formatCurrency(record.basic_salary)}</TableCell>
-                        <TableCell className="text-green-600">
-                          +{formatCurrency(record.allowances)}
-                        </TableCell>
-                        <TableCell className="text-red-600">
-                          -{formatCurrency(record.deductions)}
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          {formatCurrency(record.net_salary)}
-                        </TableCell>
+                        <TableCell className="text-sm">{formatCurrency(record.basic_salary)}</TableCell>
+                        <TableCell className="text-sm text-green-600">+{formatCurrency(record.allowances)}</TableCell>
+                        <TableCell className="text-sm text-red-600">-{formatCurrency(record.deductions)}</TableCell>
+                        <TableCell className="font-semibold">{formatCurrency(record.net_salary)}</TableCell>
                         <TableCell>{getStatusBadge(record.status)}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="cursor-pointer">
-                                <FileText className="mr-2 h-4 w-4" />
-                                View Details
-                              </DropdownMenuItem>
-                              {canManagePayroll && (
-                                <>
-                                  <DropdownMenuItem className="cursor-pointer">
-                                    <DollarSign className="mr-2 h-4 w-4" />
-                                    Edit Payment
-                                  </DropdownMenuItem>
-                                  {record.status === 'failed' && (
-                                    <DropdownMenuItem className="cursor-pointer">
-                                      <AlertCircle className="mr-2 h-4 w-4" />
-                                      Retry Payment
-                                    </DropdownMenuItem>
-                                  )}
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                        {canModify && (
+                          <TableCell className="text-right">
+                             <Button variant="ghost" size="icon">
+                               <MoreVertical className="h-4 w-4" />
+                             </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="allowances">
-            <Card className="border backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle>Staff Allowances</CardTitle>
-                <CardDescription>
-                  View and manage staff allowances and benefits
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Staff</TableHead>
-                      <TableHead>Allowance Type</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Month</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockAllowances.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">{record.staff_name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{record.type}</Badge>
-                        </TableCell>
-                        <TableCell className="text-green-600 font-medium">
-                          {formatCurrency(record.amount)}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(record.year, record.month - 1).toLocaleString('en-US', {
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(record.status)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="history">
-            <Card className="border backdrop-blur-sm p-8 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold">Payment History</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                View historical payment records and receipts
-              </p>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Forms remain similar but with updated handlers */}
+      <Dialog open={isAddPayrollOpen} onOpenChange={setIsAddPayrollOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Process Payroll</DialogTitle></DialogHeader>
+          <PayrollForm onSuccess={() => setIsAddPayrollOpen(false)} />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isAddAllowanceOpen} onOpenChange={setIsAddAllowanceOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Allowance</DialogTitle></DialogHeader>
+          <AllowanceForm onSuccess={() => setIsAddAllowanceOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
+  );
+}
+
+function TransactionForm({ onSuccess }: { onSuccess: () => void }) {
+  return (
+    <div className="grid gap-4 py-4">
+      <div className="space-y-2">
+        <Label>Transaction Type</Label>
+        <Select defaultValue="income">
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="income">Income (Inflow)</SelectItem>
+            <SelectItem value="expenditure">Expenditure (Outflow)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Source / Description</Label>
+        <Input placeholder="e.g. State Allocation, Office Supplies" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Category</Label>
+          <Select>
+            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="allocation">Allocation</SelectItem>
+              <SelectItem value="payroll">Payroll</SelectItem>
+              <SelectItem value="operations">Operations</SelectItem>
+              <SelectItem value="ict">ICT</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Amount</Label>
+          <Input type="number" placeholder="0.00" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label>Date</Label>
+        <Input type="date" defaultValue={new Date().toISOString().split('T')[0]} />
+      </div>
+      <div className="flex justify-end gap-3 mt-4">
+        <Button variant="outline" onClick={onSuccess}>Cancel</Button>
+        <Button onClick={onSuccess}>Save Transaction</Button>
+      </div>
+    </div>
   );
 }
 
@@ -554,39 +649,19 @@ function PayrollForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="grid gap-4 py-4">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Select Month</label>
+        <Label>Select Month</Label>
         <Select defaultValue="5">
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {months.map((month) => (
-              <SelectItem key={month.value} value={month.value}>
-                {month.label}
-              </SelectItem>
+              <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Department (Optional)</label>
-        <Select defaultValue="all">
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            <SelectItem value="Administration">Administration</SelectItem>
-            <SelectItem value="Finance">Finance</SelectItem>
-            <SelectItem value="ICT">ICT</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
       <div className="flex justify-end gap-3 mt-4">
-        <Button variant="outline" onClick={onSuccess}>
-          Cancel
-        </Button>
-        <Button>Process</Button>
+        <Button variant="outline" onClick={onSuccess}>Cancel</Button>
+        <Button onClick={onSuccess}>Process</Button>
       </div>
     </div>
   );
@@ -596,64 +671,27 @@ function AllowanceForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="grid gap-4 py-4">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Select Staff</label>
-        <Select>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose staff member" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1">Adebayo Johnson</SelectItem>
-            <SelectItem value="2">Grace Okonkwo</SelectItem>
-            <SelectItem value="3">Emmanuel Obi</SelectItem>
-          </SelectContent>
-        </Select>
+        <Label>Select Staff</Label>
+        <Input placeholder="Search staff name..." />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium">Allowance Type</label>
+        <Label>Allowance Type</Label>
         <Select>
-          <SelectTrigger>
-            <SelectValue placeholder="Select type" />
-          </SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="Housing">Housing</SelectItem>
             <SelectItem value="Transport">Transport</SelectItem>
             <SelectItem value="Medical">Medical</SelectItem>
-            <SelectItem value="Education">Education</SelectItem>
-            <SelectItem value="Utility">Utility</SelectItem>
-            <SelectItem value="Meal">Meal</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium">Amount</label>
-        <Input type="number" placeholder="Enter amount" />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Month</label>
-          <Select defaultValue="5">
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {months.map((month) => (
-                <SelectItem key={month.value} value={month.value}>
-                  {month.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Year</label>
-          <Input type="number" defaultValue="2026" />
-        </div>
+        <Label>Amount</Label>
+        <Input type="number" placeholder="0.00" />
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <Button variant="outline" onClick={onSuccess}>
-          Cancel
-        </Button>
-        <Button>Add Allowance</Button>
+        <Button variant="outline" onClick={onSuccess}>Cancel</Button>
+        <Button onClick={onSuccess}>Add Allowance</Button>
       </div>
     </div>
   );

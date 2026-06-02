@@ -294,8 +294,31 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- ============================================================
--- 17. ANNOUNCEMENTS
+-- 20. TRANSACTIONS (Income & Expenditure)
 -- ============================================================
+CREATE TYPE public.transaction_type AS ENUM ('income', 'expenditure');
+
+CREATE TABLE IF NOT EXISTS public.transactions (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  type          transaction_type NOT NULL,
+  source        TEXT NOT NULL,
+  category      TEXT NOT NULL,
+  amount        NUMERIC(15,2) NOT NULL DEFAULT 0,
+  date          DATE NOT NULL DEFAULT CURRENT_DATE,
+  status        TEXT NOT NULL DEFAULT 'completed',
+  recorded_by   UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- 21. BRANDING SETTINGS (Extended)
+-- ============================================================
+-- These might already exist, adding columns if they don't
+ALTER TABLE public.branding_settings ADD COLUMN IF NOT EXISTS logo_url_2 TEXT;
+ALTER TABLE public.branding_settings ADD COLUMN IF NOT EXISTS logo_url_3 TEXT;
+ALTER TABLE public.branding_settings ADD COLUMN IF NOT EXISTS hero_tagline TEXT;
+
 CREATE TABLE IF NOT EXISTS public.announcements (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title         TEXT NOT NULL,

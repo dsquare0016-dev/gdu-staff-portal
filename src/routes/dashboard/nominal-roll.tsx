@@ -44,6 +44,7 @@ import {
   Eye,
   Loader2,
   FileSpreadsheet,
+  Briefcase,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/dashboard/nominal-roll')({

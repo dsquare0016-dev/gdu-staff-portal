@@ -139,79 +139,85 @@ function BrandingSettings() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-6 md:grid-cols-3">
-            {/* Primary Logo (GDU) */}
+            {/* Logo 1 (Nigerian Coat of Arms) */}
             <div className="space-y-4">
               <Label className="flex items-center gap-2">
-                Primary Logo (GDU)
-                <Badge variant="secondary" className="text-[10px] h-4">System Wide</Badge>
+                Nigerian Coat of Arms
+                <Badge variant="secondary" className="text-[10px] h-4">Seal 1</Badge>
               </Label>
               <div className="flex flex-col gap-3">
                 <div className="h-32 w-full rounded-lg border bg-white flex items-center justify-center p-4 overflow-hidden">
-                  <img src={branding?.logo_url || "/logo.png"} alt="Primary Logo" className="h-full w-full object-contain" />
+                  <img src={branding?.logo_url || "/logo.png"} alt="Nigerian Coat of Arms" className="h-full w-full object-contain" />
                 </div>
                 <Label 
                   htmlFor="logo-upload-1" 
                   className="border-2 border-dashed rounded-lg p-2 text-center hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center gap-1"
                 >
                   <Upload className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground">Change Primary Logo</p>
+                  <p className="text-[10px] text-muted-foreground">Change Coat of Arms</p>
                   <input 
                     id="logo-upload-1" 
                     type="file" 
                     accept="image/*" 
                     className="hidden" 
                     disabled={isSubmitting}
-                    onChange={(e) => handleFileUpload(e, 'Primary Logo', 'logo_url')} 
+                    onChange={(e) => handleFileUpload(e, 'Coat of Arms', 'logo_url')} 
                   />
                 </Label>
               </div>
             </div>
 
-            {/* Logo 2 (Kogi State Seal) */}
+            {/* Logo 2 (Kogi State Logo) */}
             <div className="space-y-4">
-              <Label>Secondary Logo (State Seal)</Label>
+              <Label className="flex items-center gap-2">
+                Kogi State Logo
+                <Badge variant="secondary" className="text-[10px] h-4">Seal 2</Badge>
+              </Label>
               <div className="flex flex-col gap-3">
                 <div className="h-32 w-full rounded-lg border bg-white flex items-center justify-center p-4 overflow-hidden">
-                  <img src={(branding as any)?.logo_url_2 || "/logo.png"} alt="Secondary Logo" className="h-full w-full object-contain opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all" />
+                  <img src={(branding as any)?.logo_url_2 || "/logo.png"} alt="Kogi State Logo" className="h-full w-full object-contain" />
                 </div>
                 <Label 
                   htmlFor="logo-upload-2" 
                   className="border-2 border-dashed rounded-lg p-2 text-center hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center gap-1"
                 >
                   <Upload className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground">Change Secondary Logo</p>
+                  <p className="text-[10px] text-muted-foreground">Change Kogi State Logo</p>
                   <input 
                     id="logo-upload-2" 
                     type="file" 
                     accept="image/*" 
                     className="hidden" 
                     disabled={isSubmitting}
-                    onChange={(e) => handleFileUpload(e, 'Secondary Logo', 'logo_url_2')} 
+                    onChange={(e) => handleFileUpload(e, 'Kogi Logo', 'logo_url_2')} 
                   />
                 </Label>
               </div>
             </div>
 
-            {/* Logo 3 (Other Seal) */}
+            {/* Logo 3 (GDU Logo) */}
             <div className="space-y-4">
-              <Label>Tertiary Logo (Additional Seal)</Label>
+              <Label className="flex items-center gap-2">
+                Current GDU Logo
+                <Badge variant="secondary" className="text-[10px] h-4">Seal 3</Badge>
+              </Label>
               <div className="flex flex-col gap-3">
                 <div className="h-32 w-full rounded-lg border bg-white flex items-center justify-center p-4 overflow-hidden">
-                  <img src={(branding as any)?.logo_url_3 || "/logo.png"} alt="Tertiary Logo" className="h-full w-full object-contain opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all" />
+                  <img src={(branding as any)?.logo_url_3 || "/logo.png"} alt="GDU Logo" className="h-full w-full object-contain" />
                 </div>
                 <Label 
                   htmlFor="logo-upload-3" 
                   className="border-2 border-dashed rounded-lg p-2 text-center hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center gap-1"
                 >
                   <Upload className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground">Change Tertiary Logo</p>
+                  <p className="text-[10px] text-muted-foreground">Change GDU Logo</p>
                   <input 
                     id="logo-upload-3" 
                     type="file" 
                     accept="image/*" 
                     className="hidden" 
                     disabled={isSubmitting}
-                    onChange={(e) => handleFileUpload(e, 'Tertiary Logo', 'logo_url_3')} 
+                    onChange={(e) => handleFileUpload(e, 'GDU Logo', 'logo_url_3')} 
                   />
                 </Label>
               </div>

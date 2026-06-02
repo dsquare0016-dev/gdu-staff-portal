@@ -62,8 +62,12 @@ import {
   Clock,
   FileSpreadsheet,
   Download as DownloadIcon,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 export const Route = createFileRoute('/dashboard/documents')({
   head: () => ({
@@ -471,25 +475,89 @@ function DocumentsPage() {
 }
 
 function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('other');
+  const [staffName, setStaffName] = useState('');
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
+      if (!name) setName(selectedFile.name);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      toast.error('Please select a file first');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // 1. Upload to Cloudinary
+      const res = await uploadToCloudinary(file, 'documents');
+
+      // 2. Save record to Supabase
+      const { error } = await supabase
+        .from('documents')
+        .insert({
+          name: name || file.name,
+          file_url: res.secure_url,
+          file_type: file.type.split('/')[1] || 'unknown',
+          file_size: file.size,
+          category_id: category, // Assuming category ID matches for now
+          status: 'pending'
+        });
+
+      if (error) throw error;
+
+      toast.success('Document uploaded successfully and awaiting review');
+      onSuccess();
+    } catch (error: any) {
+      toast.error('Upload failed: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="grid gap-4 py-4">
-      <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-        <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-        <p className="text-sm text-muted-foreground">
-          Click or drag to upload files
+      <div 
+        className={cn(
+          "border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer relative",
+          file ? "border-primary bg-primary/5" : "hover:border-primary/50"
+        )}
+        onClick={() => document.getElementById('file-input')?.click()}
+      >
+        <input 
+          id="file-input"
+          type="file" 
+          className="hidden" 
+          onChange={handleFileChange}
+        />
+        <Upload className={cn("h-8 w-8 mx-auto mb-2", file ? "text-primary" : "text-muted-foreground")} />
+        <p className="text-sm font-medium">
+          {file ? file.name : "Click or drag to upload files"}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          PDF, DOCX, XLSX, JPG, PNG (Max 10MB)
+          {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "PDF, DOCX, XLSX, JPG, PNG (Max 10MB)"}
         </p>
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium">Document Name</label>
-        <Input placeholder="Enter document name" />
+        <Input 
+          placeholder="Enter document name" 
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Category</label>
-          <Select>
+          <Select value={category} onValueChange={setCategory}>
             <SelectTrigger>
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
@@ -505,14 +573,27 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Related Staff</label>
-          <Input placeholder="Search staff" />
+          <Input 
+            placeholder="Search staff" 
+            value={staffName}
+            onChange={(e) => setStaffName(e.target.value)}
+          />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <Button variant="outline" onClick={onSuccess}>
+        <Button variant="outline" onClick={onSuccess} disabled={isUploading}>
           Cancel
         </Button>
-        <Button>Upload</Button>
+        <Button onClick={handleUpload} disabled={isUploading}>
+          {isUploading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            'Upload Document'
+          )}
+        </Button>
       </div>
     </div>
   );

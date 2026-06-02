@@ -70,10 +70,10 @@ const navItems: NavItem[] = [
     roles: ['admin', 'dg', 'ta', 'super_admin', 'ict'],
   },
   {
-    label: 'Payroll & Allowances',
+    label: 'Finance & Accounts',
     icon: Wallet,
     href: '/dashboard/payroll',
-    roles: ['accounts', 'admin', 'super_admin'],
+    roles: ['accounts', 'admin', 'super_admin', 'dg', 'ta', 'ict'],
   },
   {
     label: 'Departments',
