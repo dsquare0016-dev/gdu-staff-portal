@@ -2,12 +2,16 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
 import { useState, useRef, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 import {
   MessageSquare,
   Send,
@@ -18,15 +22,19 @@ import {
   MoreVertical,
   Phone,
   Video,
-  Image,
+  Image as ImageIcon,
   Smile,
   Paperclip,
   Check,
   CheckCheck,
   Hash,
   Megaphone,
+  Loader2,
+  FileIcon,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 export const Route = createFileRoute('/dashboard/chat')({
   head: () => ({
@@ -37,69 +45,109 @@ export const Route = createFileRoute('/dashboard/chat')({
 
 interface ChatUser {
   id: string;
-  name: string;
+  full_name: string;
   email: string;
-  avatar_url?: string;
-  status: 'online' | 'offline' | 'away';
-  lastSeen?: string;
-  unread: number;
+  passport_url?: string;
+  status: 'active' | 'inactive';
   role: string;
+  last_seen?: string;
 }
 
 interface Message {
   id: string;
   sender_id: string;
+  receiver_id?: string;
+  group_id?: string;
   content: string;
-  timestamp: string;
-  status: 'sent' | 'delivered' | 'read';
+  attachment_url?: string;
+  attachment_type?: string;
+  created_at: string;
+  is_read: boolean;
 }
-
-interface ChatGroup {
-  id: string;
-  name: string;
-  type: 'direct' | 'group' | 'department';
-  members: number;
-  lastMessage?: string;
-  unread: number;
-  avatar_url?: string;
-  is_pinned?: boolean;
-}
-
-const mockUsers: ChatUser[] = [
-  { id: '1', name: 'Adebayo Johnson', email: 'adebayo@gdu.gov.ng', status: 'online', unread: 2, role: 'admin' },
-  { id: '2', name: 'Grace Okonkwo', email: 'grace@gdu.gov.ng', status: 'online', unread: 0, role: 'accounts' },
-  { id: '3', name: 'Emmanuel Obi', email: 'emmanuel@gdu.gov.ng', status: 'away', unread: 5, role: 'ict' },
-  { id: '4', name: 'Fatima Bello', email: 'fatima@gdu.gov.ng', status: 'offline', lastSeen: '2h ago', unread: 0, role: 'staff' },
-  { id: '5', name: 'Chidi Okafor', email: 'chidi@gdu.gov.ng', status: 'online', unread: 1, role: 'admin' },
-];
-
-const mockGroups: ChatGroup[] = [
-  { id: 'g1', name: 'General', type: 'group', members: 156, lastMessage: 'New announcement posted', unread: 3, is_pinned: true },
-  { id: 'g2', name: 'HR Department', type: 'department', members: 12, lastMessage: 'Leave request approved', unread: 0 },
-  { id: 'g3', name: 'Finance Team', type: 'department', members: 8, lastMessage: 'Payroll processed', unread: 0 },
-  { id: 'g4', name: 'ICT Support', type: 'department', members: 5, lastMessage: 'System maintenance tonight', unread: 1 },
-  { id: 'g5', name: 'Project Updates', type: 'group', members: 45, lastMessage: 'Q2 report available', unread: 0 },
-];
-
-const mockMessages: Message[] = [
-  { id: '1', sender_id: '1', content: 'Good morning everyone!', timestamp: '09:00 AM', status: 'read' },
-  { id: '2', sender_id: '2', content: 'Good morning! Please remember the meeting at 10am.', timestamp: '09:05 AM', status: 'read' },
-  { id: '3', sender_id: '3', content: 'I\'ll be there. Should we prepare the quarterly reports?', timestamp: '09:10 AM', status: 'read' },
-  { id: '4', sender_id: '1', content: 'Yes, please bring the attendance summary as well.', timestamp: '09:12 AM', status: 'delivered' },
-  { id: '5', sender_id: '5', content: 'I\'ve uploaded the files to the portal. Please review before the meeting.', timestamp: '09:15 AM', status: 'sent' },
-];
-
-const mockAnnouncements = [
-  { id: '1', title: 'Public Holiday Notice', body: 'The office will be closed on Monday for Democracy Day celebrations.', date: '2026-05-28', pinned: true },
-  { id: '2', title: 'New Attendance Policy', body: 'Please note the updated attendance guidelines effective from June 1st.', date: '2026-05-25', pinned: false },
-];
 
 function ChatPage() {
   const { profile } = useAuth();
-  const [selectedChat, setSelectedChat] = useState<string | null>('g1');
+  const queryClient = useQueryClient();
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [chatType, setChatType] = useState<'chats' | 'groups' | 'announcements'>('chats');
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachment, setAttachment] = useState<{ url: string; type: string; name: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch users for direct chats
+  const { data: users = [] } = useQuery({
+    queryKey: ['chat-users'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select('*')
+        .neq('id', profile?.id)
+        .eq('status', 'active')
+        .order('full_name');
+      if (error) throw error;
+      return data as ChatUser[];
+    },
+    enabled: !!profile?.id,
+  });
+
+  // Fetch announcements
+  const { data: announcements = [] } = useQuery({
+    queryKey: ['announcements'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch messages for selected chat
+  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['messages', selectedChat],
+    queryFn: async () => {
+      if (!selectedChat) return [];
+      
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(sender_id.eq.${profile?.id},receiver_id.eq.${selectedChat}),and(sender_id.eq.${selectedChat},receiver_id.eq.${profile?.id})`)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      return data as Message[];
+    },
+    enabled: !!selectedChat && chatType === 'chats',
+  });
+
+  // Real-time subscription
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const channel = supabase
+      .channel('public:messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `receiver_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          queryClient.invalidateQueries({ queryKey: ['messages'] });
+          toast.info('New message received');
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, queryClient]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -107,18 +155,59 @@ function ChatPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [selectedChat]);
+  }, [messages, selectedChat]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'online':
-        return 'bg-green-500';
-      case 'away':
-        return 'bg-yellow-500';
-      default:
-        return 'bg-gray-400';
+  const sendMessageMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedChat || (!message.trim() && !attachment)) return;
+
+      const newMessage = {
+        sender_id: profile?.id,
+        receiver_id: chatType === 'chats' ? selectedChat : null,
+        group_id: chatType === 'groups' ? selectedChat : null,
+        content: message.trim(),
+        attachment_url: attachment?.url,
+        attachment_type: attachment?.type,
+      };
+
+      const { error } = await supabase.from('messages').insert([newMessage]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setMessage('');
+      setAttachment(null);
+      queryClient.invalidateQueries({ queryKey: ['messages', selectedChat] });
+    },
+    onError: (error) => {
+      toast.error('Failed to send message: ' + error.message);
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const res = await uploadToCloudinary(file, 'chat_attachments');
+      setAttachment({
+        url: res.secure_url,
+        type: res.resource_type,
+        name: file.name,
+      });
+      toast.success('File uploaded successfully');
+    } catch (error: any) {
+      toast.error('Upload failed: ' + error.message);
+    } finally {
+      setIsUploading(false);
     }
   };
+
+  const getStatusColor = (status: string) => {
+    return status === 'active' ? 'bg-green-500' : 'bg-gray-400';
+  };
+
+  const selectedUser = users.find(u => u.id === selectedChat);
 
   return (
     <DashboardLayout>
@@ -173,7 +262,7 @@ function ChatPage() {
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-2">
               {chatType === 'chats' &&
-                mockUsers.map((user) => (
+                users.map((user) => (
                   <button
                     key={user.id}
                     onClick={() => setSelectedChat(user.id)}
@@ -186,9 +275,9 @@ function ChatPage() {
                   >
                     <div className="relative">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={user.avatar_url} />
+                        <AvatarImage src={user.passport_url} />
                         <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground">
-                          {user.name.charAt(0)}
+                          {user.full_name.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <div
@@ -200,60 +289,15 @@ function ChatPage() {
                     </div>
                     <div className="flex-1 min-w-0 text-left">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium truncate">{user.name}</p>
-                        {user.unread > 0 && (
-                          <Badge className="h-5 w-5 rounded-full p-0 text-xs justify-center bg-primary">
-                            {user.unread}
-                          </Badge>
-                        )}
+                        <p className="text-sm font-medium truncate">{user.full_name}</p>
                       </div>
                       <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
                     </div>
                   </button>
                 ))}
 
-              {chatType === 'groups' &&
-                mockGroups.map((group) => (
-                  <button
-                    key={group.id}
-                    onClick={() => setSelectedChat(group.id)}
-                    className={cn(
-                      'w-full flex items-center gap-3 p-2 rounded-lg transition-colors',
-                      selectedChat === group.id
-                        ? 'bg-primary/10 text-primary'
-                        : 'hover:bg-muted/50'
-                    )}
-                  >
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      {group.type === 'department' ? (
-                        <Users className="h-5 w-5 text-primary" />
-                      ) : (
-                        <Hash className="h-5 w-5 text-primary" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium flex items-center gap-1">
-                          {group.is_pinned && (
-                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          )}
-                          {group.name}
-                        </p>
-                        {group.unread > 0 && (
-                          <Badge className="h-5 w-5 rounded-full p-0 text-xs justify-center bg-primary">
-                            {group.unread}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {group.lastMessage}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-
               {chatType === 'announcements' &&
-                mockAnnouncements.map((ann) => (
+                announcements.map((ann) => (
                   <button
                     key={ann.id}
                     className="w-full flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
@@ -264,14 +308,14 @@ function ChatPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium">{ann.title}</p>
-                        {ann.pinned && (
+                        {ann.is_pinned && (
                           <Badge variant="secondary" className="text-xs">
                             Pinned
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{ann.body}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{ann.date}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{ann.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{format(new Date(ann.created_at), 'MMM d, yyyy')}</p>
                     </div>
                   </button>
                 ))}
@@ -286,22 +330,17 @@ function ChatPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
+                      <AvatarImage src={selectedUser?.passport_url} />
                       <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground">
-                        G
+                        {selectedUser?.full_name.charAt(0) || 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <div>
                       <CardTitle className="text-base">
-                        {chatType === 'groups'
-                          ? mockGroups.find((g) => g.id === selectedChat)?.name
-                          : chatType === 'chats'
-                            ? mockUsers.find((u) => u.id === selectedChat)?.name
-                            : 'Announcements'}
+                        {selectedUser?.full_name}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">
-                        {chatType === 'groups'
-                          ? `${mockGroups.find((g) => g.id === selectedChat)?.members} members`
-                          : mockUsers.find((u) => u.id === selectedChat)?.email}
+                        {selectedUser?.email}
                       </p>
                     </div>
                   </div>
@@ -321,79 +360,127 @@ function ChatPage() {
 
               <ScrollArea className="flex-1 p-4">
                 <div className="space-y-4">
-                  {mockMessages.map((msg) => {
-                    const isMe = msg.sender_id === '1';
-                    const sender = mockUsers.find((u) => u.id === msg.sender_id);
-                    return (
-                      <div
-                        key={msg.id}
-                        className={cn('flex gap-3', isMe && 'flex-row-reverse')}
-                      >
-                        {!isMe && (
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs">
-                              {sender?.name.charAt(0) || 'U'}
-                            </AvatarFallback>
-                          </Avatar>
-                        )}
+                  {isLoadingMessages ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : (
+                    messages.map((msg) => {
+                      const isMe = msg.sender_id === profile?.id;
+                      return (
                         <div
-                          className={cn(
-                            'max-w-[70%] rounded-2xl px-4 py-2',
-                            isMe
-                              ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                              : 'bg-muted rounded-tl-sm'
-                          )}
+                          key={msg.id}
+                          className={cn('flex gap-3', isMe && 'flex-row-reverse')}
                         >
                           {!isMe && (
-                            <p className="text-xs font-medium mb-1 text-primary">
-                              {sender?.name}
-                            </p>
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={selectedUser?.passport_url} />
+                              <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs">
+                                {selectedUser?.full_name.charAt(0) || 'U'}
+                              </AvatarFallback>
+                            </Avatar>
                           )}
-                          <p className="text-sm">{msg.content}</p>
                           <div
                             className={cn(
-                              'flex items-center justify-end gap-1 mt-1',
-                              isMe && 'flex-row-reverse'
+                              'max-w-[70%] rounded-2xl px-4 py-2',
+                              isMe
+                                ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                                : 'bg-muted rounded-tl-sm'
                             )}
                           >
-                            <span className="text-[10px] opacity-70">{msg.timestamp}</span>
-                            {isMe && (
-                              msg.status === 'read' ? (
-                                <CheckCheck className="h-3 w-3" />
-                              ) : msg.status === 'delivered' ? (
-                                <CheckCheck className="h-3 w-3 opacity-50" />
-                              ) : (
-                                <Check className="h-3 w-3 opacity-50" />
-                              )
+                            {msg.content && <p className="text-sm">{msg.content}</p>}
+                            {msg.attachment_url && (
+                              <div className="mt-2">
+                                {msg.attachment_type === 'image' ? (
+                                  <img 
+                                    src={msg.attachment_url} 
+                                    alt="Attachment" 
+                                    className="max-w-full rounded-lg cursor-pointer hover:opacity-90"
+                                    onClick={() => window.open(msg.attachment_url, '_blank')}
+                                  />
+                                ) : (
+                                  <a 
+                                    href={msg.attachment_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 p-2 bg-background/10 rounded border border-white/20 hover:bg-background/20 transition-colors"
+                                  >
+                                    <FileIcon className="h-4 w-4" />
+                                    <span className="text-xs truncate max-w-[150px]">View Attachment</span>
+                                  </a>
+                                )}
+                              </div>
                             )}
+                            <div
+                              className={cn(
+                                'flex items-center justify-end gap-1 mt-1',
+                                isMe && 'flex-row-reverse'
+                              )}
+                            >
+                              <span className="text-[10px] opacity-70">
+                                {format(new Date(msg.created_at), 'HH:mm')}
+                              </span>
+                              {isMe && (
+                                msg.is_read ? (
+                                  <CheckCheck className="h-3 w-3" />
+                                ) : (
+                                  <Check className="h-3 w-3 opacity-50" />
+                                )
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
               </ScrollArea>
 
-              <div className="p-4 border-t">
+              <div className="p-4 border-t space-y-2">
+                {attachment && (
+                  <div className="flex items-center justify-between p-2 bg-muted rounded-lg border">
+                    <div className="flex items-center gap-2">
+                      <FileIcon className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-medium truncate max-w-[200px]">{attachment.name}</span>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAttachment(null)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="flex-shrink-0">
-                    <Paperclip className="h-5 w-5" />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="flex-shrink-0"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
                   </Button>
                   <Button variant="ghost" size="icon" className="flex-shrink-0">
-                    <Image className="h-5 w-5" />
+                    <Smile className="h-5 w-5" />
                   </Button>
                   <Input
                     placeholder="Type a message..."
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     className="flex-1"
+                    onKeyDown={(e) => e.key === 'Enter' && sendMessageMutation.mutate()}
                   />
-                  <Button variant="ghost" size="icon" className="flex-shrink-0">
-                    <Smile className="h-5 w-5" />
-                  </Button>
-                  <Button size="icon" disabled={!message.trim()}>
-                    <Send className="h-4 w-4" />
+                  <Button 
+                    size="icon" 
+                    disabled={(!message.trim() && !attachment) || sendMessageMutation.isPending}
+                    onClick={() => sendMessageMutation.mutate()}
+                  >
+                    {sendMessageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>

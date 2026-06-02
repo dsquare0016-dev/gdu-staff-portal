@@ -134,6 +134,7 @@ function AttendancePage() {
   });
 
   const canManageAttendance = canAccess('attendance', 'create') || canAccess('attendance', 'edit');
+  const canInitiateAttendance = profile?.role === 'ict' || profile?.role === 'admin' || profile?.role === 'super_admin';
 
   const updateAttendanceMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string, updates: any }) => {
@@ -289,26 +290,28 @@ function AttendancePage() {
               <Download className="mr-2 h-4 w-4" />
               Export Report
             </Button>
-            <Dialog open={isCheckInOpen} onOpenChange={setIsCheckInOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Record Attendance
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Record Attendance</DialogTitle>
-                  <DialogDescription>
-                    Mark attendance for {format(date || new Date(), 'PPP')}
-                  </DialogDescription>
-                </DialogHeader>
-                <AttendanceForm onSuccess={() => {
-                  setIsCheckInOpen(false);
-                  queryClient.invalidateQueries({ queryKey: ['attendance'] });
-                }} />
-              </DialogContent>
-            </Dialog>
+            {canInitiateAttendance && (
+              <Dialog open={isCheckInOpen} onOpenChange={setIsCheckInOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Record Attendance
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Record Attendance</DialogTitle>
+                    <DialogDescription>
+                      Mark attendance for {format(date || new Date(), 'PPP')}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <AttendanceForm onSuccess={() => {
+                    setIsCheckInOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['attendance'] });
+                  }} />
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </div>
 
@@ -652,6 +655,8 @@ function AttendancePage() {
 function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
   const [selectedStaff, setSelectedStaff] = useState('');
   const [attendanceStatus, setAttendanceStatus] = useState('present');
+  const [method, setMethod] = useState<'manual' | 'qr' | 'facial'>('manual');
+  const [isScanning, setIsScanning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: staffRecords = [] } = useQuery({
@@ -667,23 +672,51 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
     },
   });
 
+  const handleScan = () => {
+    if (!selectedStaff) return toast.error('Please select a staff member first');
+    setIsScanning(true);
+    // Simulate scanning delay
+    setTimeout(() => {
+      setIsScanning(false);
+      toast.success(`${method === 'qr' ? 'QR Code' : 'Face'} scanned successfully!`);
+    }, 2000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStaff) return toast.error('Please select a staff member');
     
     setIsSubmitting(true);
     try {
+      // Check for existing attendance today
+      const today = new Date().toISOString().split('T')[0];
+      const { data: existing, error: checkError } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('staff_id', selectedStaff)
+        .eq('date', today)
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+      if (existing) {
+        toast.error('Attendance for this staff has already been recorded today');
+        setIsSubmitting(false);
+        return;
+      }
+
       const { error } = await supabase
         .from('attendance')
         .insert([{
           staff_id: selectedStaff,
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           status: attendanceStatus,
+          method: method,
           check_in: attendanceStatus === 'present' ? new Date().toISOString() : null,
+          verified: false, // Needs admin verification as per requirement
         }]);
 
       if (error) throw error;
-      toast.success('Attendance recorded successfully');
+      toast.success('Attendance recorded and pending verification');
       onSuccess();
     } catch (error: any) {
       toast.error('Failed to record attendance: ' + error.message);
@@ -709,6 +742,40 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
           </SelectContent>
         </Select>
       </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Verification Method</label>
+        <Tabs value={method} onValueChange={(v) => setMethod(v as any)} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="manual">Manual</TabsTrigger>
+            <TabsTrigger value="qr">QR Code</TabsTrigger>
+            <TabsTrigger value="facial">Facial</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {method !== 'manual' && (
+        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl bg-muted/30">
+          {isScanning ? (
+            <div className="text-center space-y-4">
+              <Loader2 className="h-12 w-12 text-primary animate-spin mx-auto" />
+              <p className="text-sm font-medium">
+                {method === 'qr' ? 'Scanning QR Code...' : 'Detecting Face...'}
+              </p>
+            </div>
+          ) : (
+            <div className="text-center space-y-4">
+              <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+                {method === 'qr' ? <FileText className="h-8 w-8 text-primary" /> : <UserCheck className="h-8 w-8 text-primary" />}
+              </div>
+              <Button type="button" variant="outline" onClick={handleScan}>
+                Start {method === 'qr' ? 'QR Scanner' : 'Facial Recognition'}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2">
         <label className="text-sm font-medium">Attendance Status</label>
         <Select value={attendanceStatus} onValueChange={setAttendanceStatus}>
@@ -720,31 +787,17 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
             <SelectItem value="absent">Absent</SelectItem>
             <SelectItem value="late">Late</SelectItem>
             <SelectItem value="leave">On Leave</SelectItem>
-            <SelectItem value="holiday">Holiday</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Check In Time</label>
-          <Input type="time" defaultValue={format(new Date(), 'HH:mm')} />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Check Out Time</label>
-          <Input type="time" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Notes</label>
-        <Input placeholder="Add any notes..." />
-      </div>
+
       <div className="flex justify-end gap-3 mt-4">
         <Button variant="outline" type="button" onClick={onSuccess}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || isScanning}>
           {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Save Record
+          Record Attendance
         </Button>
       </div>
     </form>

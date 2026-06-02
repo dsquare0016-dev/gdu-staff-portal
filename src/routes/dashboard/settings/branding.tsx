@@ -3,11 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Upload, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 export const Route = createFileRoute('/dashboard/settings/branding')({
   component: BrandingSettings,
@@ -82,24 +84,12 @@ function BrandingSettings() {
 
     try {
       setIsSubmitting(true);
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${fieldName.replace('_', '-')}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `branding/${fileName}`;
-
-      // Upload to Supabase Storage (assuming 'assets' bucket exists)
-      const { error: uploadError } = await supabase.storage
-        .from('assets')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('assets')
-        .getPublicUrl(filePath);
+      
+      // Upload to Cloudinary
+      const res = await uploadToCloudinary(file, 'branding');
 
       // Update database
-      await updateBrandingMutation.mutateAsync({ [fieldName]: publicUrl });
+      await updateBrandingMutation.mutateAsync({ [fieldName]: res.secure_url });
       
       toast.success(`${type} uploaded and updated successfully`);
     } catch (error: any) {

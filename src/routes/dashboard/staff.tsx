@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -522,21 +523,11 @@ function StaffForm({
 
     try {
       setIsSubmitting(true);
-      const fileExt = file.name.split('.').pop();
-      const fileName = `passport-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `passports/${fileName}`;
+      
+      // Upload to Cloudinary
+      const res = await uploadToCloudinary(file, 'passports');
 
-      const { error: uploadError } = await supabase.storage
-        .from('assets')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('assets')
-        .getPublicUrl(filePath);
-
-      setFormData({ ...formData, passport_url: publicUrl });
+      setFormData({ ...formData, passport_url: res.secure_url });
       toast.success('Passport photo uploaded');
     } catch (error: any) {
       toast.error('Error uploading passport: ' + error.message);
