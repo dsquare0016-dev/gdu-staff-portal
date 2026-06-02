@@ -40,6 +40,16 @@ export function FloatingAIAssistant() {
     }
   }, [messages, isOpen, isTyping]);
 
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
+
   const handleSend = async () => {
     if (!input.trim()) return;
 

@@ -21,6 +21,7 @@ export interface Profile {
   last_seen: string | null;
   created_at: string;
   updated_at: string;
+  staff_id?: string;
 }
 
 export interface Department {

@@ -87,10 +87,50 @@ function StaffManagementPage() {
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [statusFilter, setStatusFilter] = useState('All Status');
+  const updateStaffRoleMutation = useMutation({
+    mutationFn: async ({ staffId, userId, newRole }: { staffId: string, userId: string | null, newRole: string }) => {
+      // 1. Update staff_records
+      const { error: staffError } = await supabase
+        .from('staff_records')
+        .update({ role: newRole })
+        .eq('id', staffId);
+      
+      if (staffError) throw staffError;
+
+      // 2. Update profiles if user_id exists
+      if (userId) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ role: newRole as any })
+          .eq('id', userId);
+        
+        if (profileError) throw profileError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff-records'] });
+      toast.success('User role updated successfully');
+    },
+    onError: (error: any) => {
+      toast.error('Failed to update role: ' + error.message);
+    },
+  });
+
+  const [roleUpdateStaff, setRoleUpdateStaff] = useState<any>(null);
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+
+  const handleRoleUpdate = (staff: any, newRole: string) => {
+    updateStaffRoleMutation.mutate({
+      staffId: staff.id,
+      userId: staff.user_id,
+      newRole
+    });
+    setIsRoleDialogOpen(false);
+   };
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
-  // Fetch departments from database
-  const { data: dbDepartments = [] } = useQuery({
+   const { data: dbDepartments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -399,6 +439,18 @@ function StaffManagementPage() {
                                         Edit Staff
                                       </Link>
                                     </DropdownMenuItem>
+                                    {isSuperAdmin && (
+                                      <DropdownMenuItem 
+                                        className="cursor-pointer"
+                                        onClick={() => {
+                                          setRoleUpdateStaff(staff);
+                                          setIsRoleDialogOpen(true);
+                                        }}
+                                      >
+                                        <Shield className="mr-2 h-4 w-4" />
+                                        Change Role
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem 
                                       className="cursor-pointer"
                                       onClick={() => window.location.href = `mailto:${staff.email}`}
@@ -461,6 +513,43 @@ function StaffManagementPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Role Change Dialog */}
+        <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Change System Role</DialogTitle>
+              <DialogDescription>
+                Assign a new login role to {roleUpdateStaff?.full_name}. This affects their system permissions.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select New Role</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {availableRoles.filter(r => r !== 'All Roles').map((role) => (
+                    <Button
+                      key={role}
+                      variant={roleUpdateStaff?.role === role ? "default" : "outline"}
+                      className="justify-start h-12 gap-3"
+                      onClick={() => handleRoleUpdate(roleUpdateStaff, role)}
+                      disabled={updateStaffRoleMutation.isPending}
+                    >
+                      <Shield className={cn("h-4 w-4", roleUpdateStaff?.role === role ? "text-primary-foreground" : "text-primary")} />
+                      <div className="text-left">
+                        <p className="text-sm font-semibold uppercase">{role.replace('_', ' ')}</p>
+                      </div>
+                      {roleUpdateStaff?.role === role && <CheckCircle className="ml-auto h-4 w-4" />}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button variant="ghost" onClick={() => setIsRoleDialogOpen(false)}>Cancel</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

@@ -109,10 +109,10 @@ function AttendancePage() {
 
   // Fetch attendance from database
   const { data: attendanceRecords = [], isLoading } = useQuery({
-    queryKey: ['attendance', date?.toISOString().split('T')[0]],
+    queryKey: ['attendance', date?.toISOString().split('T')[0], profile?.id, profile?.role],
     queryFn: async () => {
       const dateStr = date?.toISOString().split('T')[0];
-      const { data, error } = await supabase
+      let query = supabase
         .from('attendance')
         .select(`
           *,
@@ -124,13 +124,23 @@ function AttendancePage() {
             passport_url,
             department:departments(name)
           )
-        `)
-        .eq('date', dateStr);
+        `);
+
+      // If not privileged role, only show own records
+       const isPrivileged = ['ict', 'admin', 'super_admin'].includes(profile?.role || '');
+       
+       if (!isPrivileged) {
+         query = query.eq('staff_id', profile?.staff_id).eq('approved', true);
+       } else {
+         query = query.eq('date', dateStr);
+       }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data;
     },
-    enabled: !!date,
+    enabled: !!date && !!profile,
   });
 
   const canManageAttendance = canAccess('attendance', 'edit') || canAccess('attendance', 'verify');

@@ -55,7 +55,7 @@ const navItems: NavItem[] = [
     label: 'Staff Management',
     icon: Users,
     href: '/dashboard/staff',
-    roles: ['admin', 'super_admin'],
+    roles: ['admin', 'super_admin', 'ict'],
   },
   {
     label: 'Attendance',
@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
     label: 'Nominal Roll',
     icon: ClipboardList,
     href: '/dashboard/nominal-roll',
-    roles: ['admin', 'dg', 'ta', 'super_admin'],
+    roles: ['admin', 'dg', 'ta', 'super_admin', 'ict'],
   },
   {
     label: 'Payroll & Allowances',
@@ -79,7 +79,7 @@ const navItems: NavItem[] = [
     label: 'Departments',
     icon: Building2,
     href: '/dashboard/departments',
-    roles: ['admin', 'super_admin'],
+    roles: ['admin', 'super_admin', 'ict'],
   },
   {
     label: 'Organogram',
@@ -109,7 +109,7 @@ const navItems: NavItem[] = [
     label: 'Reports & Analytics',
     icon: BarChart3,
     href: '/dashboard/reports',
-    roles: ['admin', 'dg', 'ta', 'super_admin'],
+    roles: ['admin', 'dg', 'ta', 'super_admin', 'ict'],
   },
   {
     label: 'AI Assistant',
