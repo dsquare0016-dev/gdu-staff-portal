@@ -4,7 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { History, Search, Filter, Download } from 'lucide-react';
+import { History, Search, Filter, Download, Lock } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/use-auth';
 
 export const Route = createFileRoute('/dashboard/settings/audit-logs')({
   component: AuditLogs,
@@ -19,6 +20,17 @@ const LOGS = [
 ];
 
 function AuditLogs() {
+  const { isSuperAdmin } = useAuth();
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <Lock className="h-12 w-12 text-muted-foreground" />
+        <h2 className="text-xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground">Only Super Admin can view system audit logs.</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
