@@ -176,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isSuperAdmin = profile?.role === 'super_admin';
+  const isICT = profile?.role === 'ict';
   const isAdmin = profile?.role === 'admin' || isSuperAdmin;
   const isAccounts = profile?.role === 'accounts' || isSuperAdmin;
   const isDirector = profile?.role === 'dg' || profile?.role === 'ta' || isSuperAdmin;
@@ -190,45 +191,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccess = (module: string, action: string) => {
     if (isSuperAdmin) return true;
     
-    // Default permissions for other roles
+    // Detailed permissions based on the prompt
     const rolePermissions: Record<string, Record<string, string[]>> = {
       admin: {
         staff: ['view', 'create', 'edit'],
-        attendance: ['view', 'create', 'edit', 'verify', 'approve'],
+        attendance: ['view', 'verify', 'approve', 'edit'],
         departments: ['view', 'create', 'edit'],
         announcements: ['view', 'create', 'edit'],
-        reports: ['view'],
-        payroll: ['view'],
-        documents: ['view', 'create', 'edit'],
+        nominal_roll: ['view'],
         '*': ['view'],
       },
       accounts: {
         payroll: ['view', 'create', 'edit'],
         allowances: ['view', 'create', 'edit'],
-        attendance: ['view'],
+        payments: ['view', 'create', 'edit'],
+        reports: ['view'],
+        '*': ['view'],
       },
       dg: {
         staff: ['view'],
-        attendance: ['view', 'create', 'edit'],
+        attendance: ['view'],
         payroll: ['view'],
         reports: ['view'],
+        nominal_roll: ['view'],
+        intelligence: ['view'],
+        '*': ['view'],
       },
       ta: {
         staff: ['view'],
-        attendance: ['view', 'create', 'edit'],
-        reports: ['view', 'create'],
-      },
-      ict: {
-        tickets: ['view', 'create', 'edit'],
-        staff: ['view', 'create', 'edit'],
-        attendance: ['view', 'create', 'edit'],
-        documents: ['view', 'create', 'edit'],
-      },
-      staff: {
-        profile: ['view', 'edit'],
         attendance: ['view'],
         payroll: ['view'],
-        documents: ['view', 'create'],
+        reports: ['view'],
+        nominal_roll: ['view'],
+        intelligence: ['view'],
+        '*': ['view'],
+      },
+      ict: {
+        system_settings: ['view', 'edit'],
+        branding: ['view', 'edit'],
+        staff: ['view', 'create', 'edit'],
+        attendance: ['view', 'verify', 'approve'],
+        documents: ['view', 'create', 'edit'],
+        '*': ['view'],
+      },
+      staff: {
+        profile: ['view', 'edit'], // only own
+        attendance: ['view'], // only own
+        payroll: ['view'], // only own
+        documents: ['view', 'create'], // only own
+        chat: ['view', 'create'],
+        ai_assistant: ['view'],
+        organogram: ['view'],
       },
     };
 
@@ -252,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         isSuperAdmin,
+        isICT,
         isAdmin,
         isAccounts,
         isDirector,

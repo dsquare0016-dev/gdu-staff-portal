@@ -133,7 +133,7 @@ function AttendancePage() {
     enabled: !!date,
   });
 
-  const canManageAttendance = canAccess('attendance', 'create') || canAccess('attendance', 'edit');
+  const canManageAttendance = canAccess('attendance', 'edit') || canAccess('attendance', 'verify');
   const canInitiateAttendance = profile?.role === 'ict' || profile?.role === 'admin' || profile?.role === 'super_admin';
 
   const updateAttendanceMutation = useMutation({

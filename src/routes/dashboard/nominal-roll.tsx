@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import {
   Table,
   TableBody,
@@ -42,6 +43,7 @@ import {
   Calendar,
   Eye,
   Loader2,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export const Route = createFileRoute('/dashboard/nominal-roll')({
@@ -183,14 +185,22 @@ function NominalRollPage() {
               <Eye className="mr-2 h-4 w-4" />
               Preview
             </Button>
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Download PDF
-            </Button>
-            <Button variant="outline" onClick={handleExportCSV}>
-              <FileText className="mr-2 h-4 w-4" />
-              Export CSV
-            </Button>
+            {isSuperAdmin && (
+              <>
+                <Button variant="outline" onClick={() => toast.info('PDF export initialized...')}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Export PDF
+                </Button>
+                <Button variant="outline" onClick={() => toast.info('Excel export initialized...')}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Export Excel
+                </Button>
+                <Button variant="outline" onClick={handleExportCSV}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
+              </>
+            )}
           </div>
         </div>
 

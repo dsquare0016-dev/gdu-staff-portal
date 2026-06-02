@@ -121,14 +121,14 @@ const navItems: NavItem[] = [
     label: 'System Settings',
     icon: Settings,
     href: '/dashboard/settings',
-    roles: ['staff', 'accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'],
+    roles: ['ict', 'super_admin'],
     children: [
       { label: 'Account', icon: UserCircle, href: '/dashboard/settings', roles: ['staff', 'accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'] },
-      { label: 'General', icon: Settings, href: '/dashboard/settings/general', roles: ['super_admin'] },
-      { label: 'Security', icon: Lock, href: '/dashboard/settings/security', roles: ['super_admin'] },
-      { label: 'Branding', icon: Palette, href: '/dashboard/settings/branding', roles: ['super_admin'] },
-      { label: 'Login Page', icon: ScanFace, href: '/dashboard/settings/login-page', roles: ['super_admin'] },
-      { label: 'Roles & Permissions', icon: Shield, href: '/dashboard/settings/roles', roles: ['super_admin'] },
+      { label: 'General', icon: Settings, href: '/dashboard/settings/general', roles: ['ict', 'super_admin'] },
+      { label: 'Security', icon: Lock, href: '/dashboard/settings/security', roles: ['ict', 'super_admin'] },
+      { label: 'Branding', icon: Palette, href: '/dashboard/settings/branding', roles: ['ict', 'super_admin'] },
+      { label: 'Login Page', icon: ScanFace, href: '/dashboard/settings/login-page', roles: ['ict', 'super_admin'] },
+      { label: 'Roles & Permissions', icon: Shield, href: '/dashboard/settings/roles', roles: ['ict', 'super_admin'] },
       { label: 'Audit Logs', icon: History, href: '/dashboard/settings/audit-logs', roles: ['super_admin'] },
       { label: 'Export Data', icon: Download, href: '/dashboard/settings/export', roles: ['super_admin'] },
     ],
@@ -157,8 +157,23 @@ export function Sidebar() {
   });
 
   const filteredNavItems = navItems.filter(
-    (item) => !item.roles || (profile && item.roles.includes(profile.role))
-  );
+    (item) => {
+      const hasRole = !item.roles || (profile && item.roles.includes(profile.role));
+      if (!hasRole) return false;
+      
+      // For items with children, check if the parent item itself should be visible
+      // System Settings is now restricted at the top level
+      return true;
+    }
+  ).map(item => {
+    if (item.children) {
+      return {
+        ...item,
+        children: item.children.filter(child => !child.roles || (profile && child.roles.includes(profile.role)))
+      };
+    }
+    return item;
+  }).filter(item => !item.children || item.children.length > 0);
 
   const toggleExpanded = (label: string) => {
     setExpandedItems((prev) =>

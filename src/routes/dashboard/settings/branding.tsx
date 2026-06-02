@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Save, Loader2 } from 'lucide-react';
+import { Upload, Save, Loader2, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { uploadToCloudinary } from '@/lib/cloudinary';
@@ -16,8 +17,19 @@ export const Route = createFileRoute('/dashboard/settings/branding')({
 });
 
 function BrandingSettings() {
+  const { isSuperAdmin, isICT } = useAuth();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!isSuperAdmin && !isICT) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <Lock className="h-12 w-12 text-muted-foreground" />
+        <h2 className="text-xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground">Only Super Admin or ICT can manage branding settings.</p>
+      </div>
+    );
+  }
 
   const { data: branding, isLoading } = useQuery({
     queryKey: ['branding-settings'],

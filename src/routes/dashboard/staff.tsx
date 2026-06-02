@@ -199,15 +199,19 @@ function StaffManagementPage() {
           </div>
           {canManageStaff && (
             <div className="flex items-center gap-3">
-              <Button variant="outline">
-                <Upload className="mr-2 h-4 w-4" />
-                Bulk Upload
-              </Button>
-              <Button variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Export
-              </Button>
-              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            {isSuperAdmin && (
+              <>
+                <Button variant="outline">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Bulk Upload
+                </Button>
+                <Button variant="outline">
+                  <Download className="mr-2 h-4 w-4" />
+                  Export All
+                </Button>
+              </>
+            )}
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <UserPlus className="mr-2 h-4 w-4" />
@@ -389,11 +393,16 @@ function StaffManagementPage() {
                                 </DropdownMenuItem>
                                 {canManageStaff && (
                                   <>
-                                    <DropdownMenuItem className="cursor-pointer">
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      Edit Staff
+                                    <DropdownMenuItem asChild>
+                                      <Link to={`/dashboard/staff/${staff.id}`} className="cursor-pointer">
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit Staff
+                                      </Link>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="cursor-pointer">
+                                    <DropdownMenuItem 
+                                      className="cursor-pointer"
+                                      onClick={() => window.location.href = `mailto:${staff.email}`}
+                                    >
                                       <Mail className="mr-2 h-4 w-4" />
                                       Send Message
                                     </DropdownMenuItem>

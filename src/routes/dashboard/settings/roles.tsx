@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Users, Edit2, Trash2, Plus } from 'lucide-react';
+import { Shield, Users, Edit2, Trash2, Plus, Lock } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/use-auth';
 
 export const Route = createFileRoute('/dashboard/settings/roles')({
   component: RolesSettings,
@@ -15,11 +16,22 @@ const ROLES = [
   { name: 'Accounts Officer', slug: 'accounts', count: 3, permissions: 'Payroll, Allowances' },
   { name: 'Director General', slug: 'dg', count: 1, permissions: 'Read-only, Reports' },
   { name: 'Technical Adviser', slug: 'ta', count: 2, permissions: 'Read-only, Reports' },
-  { name: 'ICT Support', slug: 'ict', count: 4, permissions: 'Tickets, ICT Tools' },
+  { name: 'ICT Support', slug: 'ict', count: 4, permissions: 'System Settings, Branding, ICT Tools' },
   { name: 'Staff Member', slug: 'staff', count: 120, permissions: 'Self Service' },
 ];
 
 function RolesSettings() {
+  const { isSuperAdmin, isICT } = useAuth();
+
+  if (!isSuperAdmin && !isICT) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <Lock className="h-12 w-12 text-muted-foreground" />
+        <h2 className="text-xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground">Only Super Admin or ICT can manage roles and permissions.</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">

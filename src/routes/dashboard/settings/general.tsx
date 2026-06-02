@@ -4,13 +4,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Globe, Clock, CheckCircle, Download, Upload, Save } from 'lucide-react';
+import { Globe, Clock, CheckCircle, Download, Upload, Save, Lock } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/use-auth';
 
 export const Route = createFileRoute('/dashboard/settings/general')({
   component: GeneralSettings,
 });
 
 function GeneralSettings() {
+  const { isSuperAdmin, isICT } = useAuth();
+
+  if (!isSuperAdmin && !isICT) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <Lock className="h-12 w-12 text-muted-foreground" />
+        <h2 className="text-xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground">Only Super Admin or ICT can manage general system settings.</p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <Card className="border backdrop-blur-sm">
