@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/hooks/use-auth';
 import { useNavigate } from '@tanstack/react-router';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { FloatingAIAssistant } from '../dashboard/floating-ai-assistant';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -40,7 +41,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden relative">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Header />
@@ -48,6 +49,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="mx-auto max-w-[1600px]">{children}</div>
         </main>
       </div>
+      <FloatingAIAssistant />
     </div>
   );
 }

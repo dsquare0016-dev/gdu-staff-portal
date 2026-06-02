@@ -94,7 +94,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string, selectedRole?: UserRole) => {
-    // Demo credentials bypass - supports both @gdu.gov.ng and @kogi-state.gov.ng
+    // 1. Attempt real Supabase Auth first
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ 
+      email: email.toLowerCase().trim(), 
+      password 
+    });
+
+    if (!authError && authData.user) {
+      // Successfully logged in via database
+      await fetchProfile(authData.user.id);
+      return { error: null };
+    }
+
+    // 2. Demo credentials bypass (fallback if not in DB or DB not set up)
     const normalizedEmail = email.toLowerCase().trim();
     
     // Check for common demo passwords or passwords that match the role
@@ -112,7 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // If no role selected, try to infer from email
       if (!selectedRole) {
-        if (normalizedEmail.includes('admin')) role = 'super_admin';
+        if (normalizedEmail.includes('superadmin')) role = 'super_admin';
+        else if (normalizedEmail.includes('admin')) role = 'admin';
         else if (normalizedEmail.includes('accounts')) role = 'accounts';
         else if (normalizedEmail.includes('dg')) role = 'dg';
         else if (normalizedEmail.includes('ict')) role = 'ict';
@@ -153,8 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: null };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error };
+    return { error: authError };
   };
 
   const signOut = async () => {
@@ -165,43 +177,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isSuperAdmin = profile?.role === 'super_admin';
   const isAdmin = profile?.role === 'admin' || isSuperAdmin;
-  const isAccounts = profile?.role === 'accounts' || isAdmin;
-  const isDirector = profile?.role === 'dg' || profile?.role === 'ta';
-  const isStaff = !isAdmin && !isAccounts && !isDirector && !isSuperAdmin;
+  const isAccounts = profile?.role === 'accounts' || isSuperAdmin;
+  const isDirector = profile?.role === 'dg' || profile?.role === 'ta' || isSuperAdmin;
+  const isStaff = profile?.role === 'staff';
 
   const hasRole = (roles: UserRole[]) => {
     if (!profile) return false;
+    if (profile.role === 'super_admin') return true;
     return roles.includes(profile.role);
   };
 
   const canAccess = (module: string, action: string) => {
     if (isSuperAdmin) return true;
-    const rolePermissions: Record<UserRole, Record<string, string[]>> = {
-      super_admin: { '*': ['view', 'create', 'edit', 'delete'] },
+    
+    // Default permissions for other roles
+    const rolePermissions: Record<string, Record<string, string[]>> = {
       admin: {
         staff: ['view', 'create', 'edit'],
-        attendance: ['view', 'create', 'edit'],
+        attendance: ['view', 'create', 'edit', 'verify', 'approve'],
+        departments: ['view', 'create', 'edit'],
+        announcements: ['view', 'create', 'edit'],
+        reports: ['view'],
         payroll: ['view'],
         documents: ['view', 'create', 'edit'],
-        announcements: ['view', 'create', 'edit'],
+        '*': ['view'],
       },
       accounts: {
         payroll: ['view', 'create', 'edit'],
         allowances: ['view', 'create', 'edit'],
+        attendance: ['view'],
       },
       dg: {
         staff: ['view'],
-        attendance: ['view'],
+        attendance: ['view', 'create', 'edit'],
         payroll: ['view'],
         reports: ['view'],
       },
       ta: {
         staff: ['view'],
-        attendance: ['view'],
-        payroll: ['view'],
-        reports: ['view'],
+        attendance: ['view', 'create', 'edit'],
+        reports: ['view', 'create'],
       },
       ict: {
+        tickets: ['view', 'create', 'edit'],
         staff: ['view', 'create', 'edit'],
         attendance: ['view', 'create', 'edit'],
         documents: ['view', 'create', 'edit'],
@@ -214,9 +232,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     };
 
-    const rolePerms = rolePermissions[profile?.role || 'staff'];
+    const userRole = profile?.role;
+    if (!userRole || !rolePermissions[userRole]) return false;
+    
+    const rolePerms = rolePermissions[userRole];
     const modulePerms = rolePerms[module] || rolePerms['*'];
-    return modulePerms?.includes(action) || false;
+    
+    if (!modulePerms) return false;
+    return modulePerms.includes(action) || modulePerms.includes('*');
   };
 
   return (

@@ -22,6 +22,8 @@ const ROLES = [
   { value: "super_admin", label: "Super Admin" },
 ];
 
+import { useQuery } from "@tanstack/react-query";
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
@@ -51,6 +53,30 @@ function LoginPage() {
   const { profile, signIn } = useAuth();
   const navigate = useNavigate();
 
+  const { data: branding } = useQuery({
+    queryKey: ['branding-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('branding_settings')
+        .select('*')
+        .single();
+      if (error) return null;
+      return data;
+    },
+  });
+
+  const { data: loginSettings } = useQuery({
+    queryKey: ['login-page-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('login_page_settings')
+        .select('*')
+        .single();
+      if (error) return null;
+      return data;
+    },
+  });
+
   // If already logged in, redirect to dashboard
   useEffect(() => {
     if (profile) {
@@ -74,6 +100,17 @@ function LoginPage() {
     navigate({ to: "/dashboard" });
   };
 
+  const heroTitle = branding?.hero_title || "GOVERNMENT DELIVERY UNIT (GDU)";
+  const heroSubtitle = branding?.hero_subtitle || "KOGI STATE GOVERNMENT";
+  const heroTagline = branding?.hero_tagline || "…Confluence of Opportunities";
+  const footerText = branding?.footer_text || "© 2025 Kogi State Government. All rights reserved.";
+  const loginTitle = loginSettings?.title || "Sign in to the GDU Admin Page";
+  const loginSubtitle = loginSettings?.subtitle || "Access and manage the Government Delivery Unit administration system.";
+  const logoUrl = branding?.logo_url || "/logo.png";
+  const logoUrl2 = (branding as any)?.logo_url_2 || "/logo.png";
+  const logoUrl3 = (branding as any)?.logo_url_3 || "/logo.png";
+  const bgUrl = branding?.login_bg_url || loginBg;
+
   return (
     <main className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-2 bg-background">
       {/* Left brand panel */}
@@ -81,7 +118,7 @@ function LoginPage() {
         aria-label="Kogi State Government Delivery Unit"
         className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-primary text-primary-foreground"
         style={{
-          backgroundImage: `linear-gradient(135deg, oklch(0.22 0.09 263 / 0.85), oklch(0.18 0.08 263 / 0.92)), url(${loginBg})`,
+          backgroundImage: `linear-gradient(135deg, oklch(0.22 0.09 263 / 0.85), oklch(0.18 0.08 263 / 0.92)), url(${bgUrl})`,
           backgroundSize: "cover, cover",
           backgroundPosition: "center, center",
         }}
@@ -96,21 +133,21 @@ function LoginPage() {
         <div className="relative flex-1 flex flex-col items-center justify-center px-12 text-center">
           {/* Seals row */}
           <div className="flex items-center justify-center gap-6 mb-12">
-            {[1, 2, 3].map((i) => (
+            {[logoUrl, logoUrl2, logoUrl3].map((url, i) => (
               <div
                 key={i}
-                className="h-24 w-24 rounded-full bg-white/95 shadow-2xl ring-4 ring-[var(--color-gold)]/40 flex items-center justify-center"
+                className="h-24 w-24 rounded-full bg-white shadow-2xl ring-4 ring-[var(--color-gold)]/40 flex items-center justify-center overflow-hidden p-2"
               >
-                <Landmark className="h-10 w-10 text-primary" />
+                <img src={url} alt={`GDU Seal ${i + 1}`} className="h-full w-full object-contain" />
               </div>
             ))}
           </div>
 
-          <h1 className="text-3xl xl:text-4xl font-bold tracking-tight">
-            GOVERNMENT DELIVERY UNIT (GDU)
+          <h1 className="text-3xl xl:text-4xl font-bold tracking-tight uppercase">
+            {heroTitle}
           </h1>
-          <p className="mt-3 text-xl font-semibold" style={{ color: "var(--color-gold)" }}>
-            KOGI STATE GOVERNMENT
+          <p className="mt-3 text-xl font-semibold uppercase" style={{ color: "var(--color-gold)" }}>
+            {heroSubtitle}
           </p>
 
           <div className="mt-6 flex items-center gap-3">
@@ -120,7 +157,7 @@ function LoginPage() {
           </div>
 
           <p className="mt-4 italic text-base text-primary-foreground/85">
-            …Confluence of Opportunities
+            {heroTagline}
           </p>
         </div>
       </section>
@@ -128,32 +165,21 @@ function LoginPage() {
       {/* Right form panel */}
       <section className="flex items-center justify-center px-6 py-12 sm:px-12 bg-background">
         <div className="w-full max-w-md">
-          {/* Hexagonal badge with user icon */}
+          {/* Hexagonal badge with logo */}
           <div className="flex justify-center mb-6">
-            <div className="relative h-16 w-14 flex items-center justify-center">
-              <svg
-                viewBox="0 0 56 64"
-                className="absolute inset-0 h-full w-full"
-                aria-hidden
-              >
-                <polygon
-                  points="28,2 53,16 53,48 28,62 3,48 3,16"
-                  fill="oklch(0.24 0.09 263)"
-                  stroke="var(--color-gold)"
-                  strokeWidth="1.5"
-                />
-                <line x1="6" y1="18" x2="6" y2="46" stroke="var(--color-gold)" strokeWidth="2" />
-              </svg>
-              <User className="relative h-6 w-6 text-white" strokeWidth={2} />
+            <div className="relative h-20 w-20 flex items-center justify-center">
+              <div className="absolute inset-0 bg-white rounded-full shadow-lg border-2 border-[var(--color-gold)] overflow-hidden p-1">
+                <img src={logoUrl} alt="GDU Logo" className="h-full w-full object-contain" />
+              </div>
             </div>
           </div>
 
           <header className="text-center mb-8">
             <h2 className="text-3xl font-bold text-foreground tracking-tight">
-              Sign in to the GDU Admin Page
+              {loginTitle}
             </h2>
             <p className="mt-3 text-muted-foreground text-sm">
-              Access and manage the Government Delivery Unit administration system.
+              {loginSubtitle}
             </p>
           </header>
 
@@ -257,20 +283,20 @@ function LoginPage() {
               <div className="h-px flex-1 bg-border" />
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full h-12 rounded-full text-base font-semibold border-2 border-primary text-primary hover:bg-primary/5"
-            >
-              <Landmark className="mr-2 h-5 w-5" />
-              HOME PAGE
-            </Button>
+            {loginSettings?.show_home_btn !== false && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-12 rounded-full text-base font-semibold border-2 border-primary text-primary hover:bg-primary/5"
+              >
+                <Landmark className="mr-2 h-5 w-5" />
+                HOME PAGE
+              </Button>
+            )}
           </form>
 
           <footer className="mt-10 flex items-center justify-center gap-3 text-xs text-muted-foreground">
-            <span>© 2025 Kogi State Government</span>
-            <span className="h-3 w-px bg-border" />
-            <span>All rights reserved.</span>
+            <span>{footerText}</span>
           </footer>
         </div>
       </section>

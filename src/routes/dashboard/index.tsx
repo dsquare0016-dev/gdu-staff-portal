@@ -14,6 +14,8 @@ import {
   AlertCircle,
   ArrowRight,
   Activity,
+  UserPlus,
+  MessageSquare,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +24,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export const Route = createFileRoute('/dashboard/')({
   head: () => ({
@@ -77,6 +82,43 @@ function DashboardPage() {
     setMounted(true);
   }, []);
 
+  const { data: staffStats } = useQuery({
+    queryKey: ['dashboard-staff-stats'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('staff_records')
+        .select('*', { count: 'exact', head: true });
+      if (error) throw error;
+      return { total: count || 0 };
+    },
+  });
+
+  const { data: attendanceStats } = useQuery({
+    queryKey: ['dashboard-attendance-stats'],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { count, error } = await supabase
+        .from('attendance')
+        .select('*', { count: 'exact', head: true })
+        .eq('date', today)
+        .eq('status', 'present');
+      if (error) throw error;
+      return { presentToday: count || 0 };
+    },
+  });
+
+  const { data: departmentStats } = useQuery({
+    queryKey: ['dashboard-department-stats'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('departments')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
+      if (error) throw error;
+      return { total: count || 0 };
+    },
+  });
+
   const formatCurrency = (value: number) => {
     try {
       return new Intl.NumberFormat('en-NG', {
@@ -99,63 +141,59 @@ function DashboardPage() {
     );
   }
 
-  return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  const attendanceRate = staffStats?.total ? Math.round((attendanceStats?.presentToday || 0) / staffStats.total * 100) : 0;
+
+  return (    <DashboardLayout>
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Welcome back, {profile?.full_name?.split(' ')[0] || 'User'}
+            <h1 className="text-3xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60">
+              Welcome back, {profile?.full_name?.split(' ')[0]}
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Here&apos;s what&apos;s happening at GDU today.
+            <p className="text-muted-foreground mt-1 flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" />
+              Here's what's happening with GDU today.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" asChild>
-              <Link to="/dashboard/reports">
-                <FileText className="mr-2 h-4 w-4" />
-                Generate Report
-              </Link>
+            <Button variant="outline" size="sm" className="hidden sm:flex">
+              <Calendar className="mr-2 h-4 w-4" />
+              {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </Button>
-            {(isAdmin || isSuperAdmin) && (
-              <Button asChild>
-                <Link to="/dashboard/staff">
-                  <Users className="mr-2 h-4 w-4" />
-                  Add Staff
-                </Link>
-              </Button>
-            )}
+            <Button size="sm" className="shadow-lg shadow-primary/20">
+              <TrendingUp className="mr-2 h-4 w-4" />
+              Generate Report
+            </Button>
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Total Staff"
-            value="156"
-            subtitle="Active workforce"
+            value={staffStats?.total.toString() || '0'}
             icon={Users}
-            trend={{ value: 5.2, isPositive: true }}
+            trend="+2.5%"
+            description="from last month"
           />
           <StatCard
-            title="Present Today"
-            value="142"
-            subtitle="90.2% attendance rate"
+            title="Attendance Rate"
+            value={`${attendanceRate}%`}
             icon={CheckCircle}
-            variant="success"
+            trend="+5.2%"
+            description="vs yesterday"
           />
           <StatCard
-            title="On Leave"
-            value="8"
-            subtitle="Currently on approved leave"
-            icon={Calendar}
-            variant="warning"
+            title="Active Departments"
+            value={departmentStats?.total.toString() || '0'}
+            icon={Activity}
+            description="Operating units"
           />
           <StatCard
             title="Monthly Payroll"
             value={formatCurrency(55000000)}
-            subtitle="May 2026 disbursement"
             icon={DollarSign}
+            trend="+12%"
+            description="May 2026 budget"
           />
         </div>
 

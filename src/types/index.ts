@@ -59,6 +59,7 @@ export interface StaffRecord {
   next_of_kin_name: string | null;
   next_of_kin_phone: string | null;
   next_of_kin_rel: string | null;
+  retirement_date: string | null;
   status: 'active' | 'inactive' | 'suspended' | 'retired';
   created_by: string | null;
   created_at: string;
@@ -76,6 +77,12 @@ export interface Attendance {
   status: AttendanceStatus;
   late_minutes: number;
   note: string | null;
+  verified: boolean;
+  verified_by: string | null;
+  verified_at: string | null;
+  approved: boolean;
+  approved_by: string | null;
+  approved_at: string | null;
   recorded_by: string | null;
   created_at: string;
   updated_at: string;

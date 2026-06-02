@@ -14,6 +14,7 @@ import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardStaffRouteImport } from './routes/dashboard/staff'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
+import { Route as DashboardProfileRouteImport } from './routes/dashboard/profile'
 import { Route as DashboardPayrollRouteImport } from './routes/dashboard/payroll'
 import { Route as DashboardOrganogramRouteImport } from './routes/dashboard/organogram'
 import { Route as DashboardNominalRollRouteImport } from './routes/dashboard/nominal-roll'
@@ -23,6 +24,14 @@ import { Route as DashboardChatRouteImport } from './routes/dashboard/chat'
 import { Route as DashboardAttendanceRouteImport } from './routes/dashboard/attendance'
 import { Route as DashboardAnnouncementsRouteImport } from './routes/dashboard/announcements'
 import { Route as DashboardAiAssistantRouteImport } from './routes/dashboard/ai-assistant'
+import { Route as DashboardSettingsIndexRouteImport } from './routes/dashboard/settings/index'
+import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
+import { Route as DashboardSettingsRolesRouteImport } from './routes/dashboard/settings/roles'
+import { Route as DashboardSettingsLoginPageRouteImport } from './routes/dashboard/settings/login-page'
+import { Route as DashboardSettingsGeneralRouteImport } from './routes/dashboard/settings/general'
+import { Route as DashboardSettingsExportRouteImport } from './routes/dashboard/settings/export'
+import { Route as DashboardSettingsBrandingRouteImport } from './routes/dashboard/settings/branding'
+import { Route as DashboardSettingsAuditLogsRouteImport } from './routes/dashboard/settings/audit-logs'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -47,6 +56,11 @@ const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
 const DashboardReportsRoute = DashboardReportsRouteImport.update({
   id: '/dashboard/reports',
   path: '/dashboard/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardProfileRoute = DashboardProfileRouteImport.update({
+  id: '/dashboard/profile',
+  path: '/dashboard/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardPayrollRoute = DashboardPayrollRouteImport.update({
@@ -94,6 +108,51 @@ const DashboardAiAssistantRoute = DashboardAiAssistantRouteImport.update({
   path: '/dashboard/ai-assistant',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardSettingsIndexRoute = DashboardSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardSettingsRoute,
+} as any)
+const DashboardSettingsSecurityRoute =
+  DashboardSettingsSecurityRouteImport.update({
+    id: '/security',
+    path: '/security',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsRolesRoute = DashboardSettingsRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => DashboardSettingsRoute,
+} as any)
+const DashboardSettingsLoginPageRoute =
+  DashboardSettingsLoginPageRouteImport.update({
+    id: '/login-page',
+    path: '/login-page',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsGeneralRoute =
+  DashboardSettingsGeneralRouteImport.update({
+    id: '/general',
+    path: '/general',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsExportRoute = DashboardSettingsExportRouteImport.update({
+  id: '/export',
+  path: '/export',
+  getParentRoute: () => DashboardSettingsRoute,
+} as any)
+const DashboardSettingsBrandingRoute =
+  DashboardSettingsBrandingRouteImport.update({
+    id: '/branding',
+    path: '/branding',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
+const DashboardSettingsAuditLogsRoute =
+  DashboardSettingsAuditLogsRouteImport.update({
+    id: '/audit-logs',
+    path: '/audit-logs',
+    getParentRoute: () => DashboardSettingsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -106,10 +165,19 @@ export interface FileRoutesByFullPath {
   '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
   '/dashboard/organogram': typeof DashboardOrganogramRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/reports': typeof DashboardReportsRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/settings': typeof DashboardSettingsRouteWithChildren
   '/dashboard/staff': typeof DashboardStaffRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/settings/audit-logs': typeof DashboardSettingsAuditLogsRoute
+  '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
+  '/dashboard/settings/export': typeof DashboardSettingsExportRoute
+  '/dashboard/settings/general': typeof DashboardSettingsGeneralRoute
+  '/dashboard/settings/login-page': typeof DashboardSettingsLoginPageRoute
+  '/dashboard/settings/roles': typeof DashboardSettingsRolesRoute
+  '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
+  '/dashboard/settings/': typeof DashboardSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -122,10 +190,18 @@ export interface FileRoutesByTo {
   '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
   '/dashboard/organogram': typeof DashboardOrganogramRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/reports': typeof DashboardReportsRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/staff': typeof DashboardStaffRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/settings/audit-logs': typeof DashboardSettingsAuditLogsRoute
+  '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
+  '/dashboard/settings/export': typeof DashboardSettingsExportRoute
+  '/dashboard/settings/general': typeof DashboardSettingsGeneralRoute
+  '/dashboard/settings/login-page': typeof DashboardSettingsLoginPageRoute
+  '/dashboard/settings/roles': typeof DashboardSettingsRolesRoute
+  '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
+  '/dashboard/settings': typeof DashboardSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -139,10 +215,19 @@ export interface FileRoutesById {
   '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
   '/dashboard/organogram': typeof DashboardOrganogramRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
+  '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/reports': typeof DashboardReportsRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
+  '/dashboard/settings': typeof DashboardSettingsRouteWithChildren
   '/dashboard/staff': typeof DashboardStaffRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/settings/audit-logs': typeof DashboardSettingsAuditLogsRoute
+  '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
+  '/dashboard/settings/export': typeof DashboardSettingsExportRoute
+  '/dashboard/settings/general': typeof DashboardSettingsGeneralRoute
+  '/dashboard/settings/login-page': typeof DashboardSettingsLoginPageRoute
+  '/dashboard/settings/roles': typeof DashboardSettingsRolesRoute
+  '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
+  '/dashboard/settings/': typeof DashboardSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -157,10 +242,19 @@ export interface FileRouteTypes {
     | '/dashboard/nominal-roll'
     | '/dashboard/organogram'
     | '/dashboard/payroll'
+    | '/dashboard/profile'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/staff'
     | '/dashboard/'
+    | '/dashboard/settings/audit-logs'
+    | '/dashboard/settings/branding'
+    | '/dashboard/settings/export'
+    | '/dashboard/settings/general'
+    | '/dashboard/settings/login-page'
+    | '/dashboard/settings/roles'
+    | '/dashboard/settings/security'
+    | '/dashboard/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -173,10 +267,18 @@ export interface FileRouteTypes {
     | '/dashboard/nominal-roll'
     | '/dashboard/organogram'
     | '/dashboard/payroll'
+    | '/dashboard/profile'
     | '/dashboard/reports'
-    | '/dashboard/settings'
     | '/dashboard/staff'
     | '/dashboard'
+    | '/dashboard/settings/audit-logs'
+    | '/dashboard/settings/branding'
+    | '/dashboard/settings/export'
+    | '/dashboard/settings/general'
+    | '/dashboard/settings/login-page'
+    | '/dashboard/settings/roles'
+    | '/dashboard/settings/security'
+    | '/dashboard/settings'
   id:
     | '__root__'
     | '/'
@@ -189,10 +291,19 @@ export interface FileRouteTypes {
     | '/dashboard/nominal-roll'
     | '/dashboard/organogram'
     | '/dashboard/payroll'
+    | '/dashboard/profile'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/staff'
     | '/dashboard/'
+    | '/dashboard/settings/audit-logs'
+    | '/dashboard/settings/branding'
+    | '/dashboard/settings/export'
+    | '/dashboard/settings/general'
+    | '/dashboard/settings/login-page'
+    | '/dashboard/settings/roles'
+    | '/dashboard/settings/security'
+    | '/dashboard/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -206,8 +317,9 @@ export interface RootRouteChildren {
   DashboardNominalRollRoute: typeof DashboardNominalRollRoute
   DashboardOrganogramRoute: typeof DashboardOrganogramRoute
   DashboardPayrollRoute: typeof DashboardPayrollRoute
+  DashboardProfileRoute: typeof DashboardProfileRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
-  DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRouteWithChildren
   DashboardStaffRoute: typeof DashboardStaffRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
@@ -247,6 +359,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/reports'
       fullPath: '/dashboard/reports'
       preLoaderRoute: typeof DashboardReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/profile': {
+      id: '/dashboard/profile'
+      path: '/dashboard/profile'
+      fullPath: '/dashboard/profile'
+      preLoaderRoute: typeof DashboardProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/payroll': {
@@ -312,8 +431,89 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAiAssistantRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/settings/': {
+      id: '/dashboard/settings/'
+      path: '/'
+      fullPath: '/dashboard/settings/'
+      preLoaderRoute: typeof DashboardSettingsIndexRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/security': {
+      id: '/dashboard/settings/security'
+      path: '/security'
+      fullPath: '/dashboard/settings/security'
+      preLoaderRoute: typeof DashboardSettingsSecurityRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/roles': {
+      id: '/dashboard/settings/roles'
+      path: '/roles'
+      fullPath: '/dashboard/settings/roles'
+      preLoaderRoute: typeof DashboardSettingsRolesRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/login-page': {
+      id: '/dashboard/settings/login-page'
+      path: '/login-page'
+      fullPath: '/dashboard/settings/login-page'
+      preLoaderRoute: typeof DashboardSettingsLoginPageRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/general': {
+      id: '/dashboard/settings/general'
+      path: '/general'
+      fullPath: '/dashboard/settings/general'
+      preLoaderRoute: typeof DashboardSettingsGeneralRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/export': {
+      id: '/dashboard/settings/export'
+      path: '/export'
+      fullPath: '/dashboard/settings/export'
+      preLoaderRoute: typeof DashboardSettingsExportRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/branding': {
+      id: '/dashboard/settings/branding'
+      path: '/branding'
+      fullPath: '/dashboard/settings/branding'
+      preLoaderRoute: typeof DashboardSettingsBrandingRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
+    '/dashboard/settings/audit-logs': {
+      id: '/dashboard/settings/audit-logs'
+      path: '/audit-logs'
+      fullPath: '/dashboard/settings/audit-logs'
+      preLoaderRoute: typeof DashboardSettingsAuditLogsRouteImport
+      parentRoute: typeof DashboardSettingsRoute
+    }
   }
 }
+
+interface DashboardSettingsRouteChildren {
+  DashboardSettingsAuditLogsRoute: typeof DashboardSettingsAuditLogsRoute
+  DashboardSettingsBrandingRoute: typeof DashboardSettingsBrandingRoute
+  DashboardSettingsExportRoute: typeof DashboardSettingsExportRoute
+  DashboardSettingsGeneralRoute: typeof DashboardSettingsGeneralRoute
+  DashboardSettingsLoginPageRoute: typeof DashboardSettingsLoginPageRoute
+  DashboardSettingsRolesRoute: typeof DashboardSettingsRolesRoute
+  DashboardSettingsSecurityRoute: typeof DashboardSettingsSecurityRoute
+  DashboardSettingsIndexRoute: typeof DashboardSettingsIndexRoute
+}
+
+const DashboardSettingsRouteChildren: DashboardSettingsRouteChildren = {
+  DashboardSettingsAuditLogsRoute: DashboardSettingsAuditLogsRoute,
+  DashboardSettingsBrandingRoute: DashboardSettingsBrandingRoute,
+  DashboardSettingsExportRoute: DashboardSettingsExportRoute,
+  DashboardSettingsGeneralRoute: DashboardSettingsGeneralRoute,
+  DashboardSettingsLoginPageRoute: DashboardSettingsLoginPageRoute,
+  DashboardSettingsRolesRoute: DashboardSettingsRolesRoute,
+  DashboardSettingsSecurityRoute: DashboardSettingsSecurityRoute,
+  DashboardSettingsIndexRoute: DashboardSettingsIndexRoute,
+}
+
+const DashboardSettingsRouteWithChildren =
+  DashboardSettingsRoute._addFileChildren(DashboardSettingsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -326,8 +526,9 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardNominalRollRoute: DashboardNominalRollRoute,
   DashboardOrganogramRoute: DashboardOrganogramRoute,
   DashboardPayrollRoute: DashboardPayrollRoute,
+  DashboardProfileRoute: DashboardProfileRoute,
   DashboardReportsRoute: DashboardReportsRoute,
-  DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardSettingsRoute: DashboardSettingsRouteWithChildren,
   DashboardStaffRoute: DashboardStaffRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }

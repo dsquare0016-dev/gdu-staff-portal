@@ -1,9 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,7 +30,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   ClipboardList,
@@ -37,11 +39,10 @@ import {
   FileText,
   Users,
   Building2,
-  Briefcase,
   Calendar,
   Eye,
+  Loader2,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export const Route = createFileRoute('/dashboard/nominal-roll')({
   head: () => ({
@@ -50,139 +51,75 @@ export const Route = createFileRoute('/dashboard/nominal-roll')({
   component: NominalRollPage,
 });
 
-const mockNominalRoll = [
-  {
-    s_no: 1,
-    full_name: 'Adebayo Johnson',
-    rank: 'Senior Administrative Officer',
-    grade_level: 8,
-    step: 4,
-    department: 'Administration',
-    role: 'admin',
-    employment_date: '2019-03-15',
-    qualification: 'B.Sc Political Science',
-    gender: 'Male',
-    state: 'Kogi',
-  },
-  {
-    s_no: 2,
-    full_name: 'Grace Okonkwo',
-    rank: 'Chief Financial Officer',
-    grade_level: 12,
-    step: 6,
-    department: 'Finance',
-    role: 'accounts',
-    employment_date: '2015-07-01',
-    qualification: 'MBA Finance',
-    gender: 'Female',
-    state: 'Lagos',
-  },
-  {
-    s_no: 3,
-    full_name: 'Emmanuel Obi',
-    rank: 'ICT Director',
-    grade_level: 14,
-    step: 2,
-    department: 'ICT',
-    role: 'ict',
-    employment_date: '2012-01-10',
-    qualification: 'Ph.D Computer Science',
-    gender: 'Male',
-    state: 'Enugu',
-  },
-  {
-    s_no: 4,
-    full_name: 'Fatima Bello',
-    rank: 'Operations Manager',
-    grade_level: 9,
-    step: 3,
-    department: 'Operations',
-    role: 'staff',
-    employment_date: '2018-05-22',
-    qualification: 'B.Sc Business Administration',
-    gender: 'Female',
-    state: 'Abuja',
-  },
-  {
-    s_no: 5,
-    full_name: 'Chidi Okafor',
-    rank: 'HR Manager',
-    grade_level: 10,
-    step: 5,
-    department: 'HR',
-    role: 'admin',
-    employment_date: '2017-09-01',
-    qualification: 'B.Sc Human Resources',
-    gender: 'Male',
-    state: 'Anambra',
-  },
-  {
-    s_no: 6,
-    full_name: 'Amina Ibrahim',
-    rank: 'Accountant',
-    grade_level: 7,
-    step: 2,
-    department: 'Finance',
-    role: 'accounts',
-    employment_date: '2020-11-15',
-    qualification: 'B.Sc Accounting',
-    gender: 'Female',
-    state: 'Kogi',
-  },
-  {
-    s_no: 7,
-    full_name: 'David Adeyemi',
-    rank: 'Director General',
-    grade_level: 17,
-    step: 1,
-    department: 'Administration',
-    role: 'dg',
-    employment_date: '2010-04-01',
-    qualification: 'M.Sc Public Administration',
-    gender: 'Male',
-    state: 'Kwara',
-  },
-  {
-    s_no: 8,
-    full_name: 'Blessing Eze',
-    rank: 'Field Officer',
-    grade_level: 5,
-    step: 1,
-    department: 'Operations',
-    role: 'staff',
-    employment_date: '2021-03-10',
-    qualification: 'ND Business Administration',
-    gender: 'Female',
-    state: 'Edo',
-  },
-];
-
-const departments = ['All Departments', 'Administration', 'Finance', 'ICT', 'Operations', 'HR'];
 const gradeLevels = ['All Levels', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17'];
 const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'ta', 'ict', 'staff'];
 
 function NominalRollPage() {
-  const { canAccess } = useAuth();
+  const { canAccess, isSuperAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [gradeFilter, setGradeFilter] = useState('All Levels');
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
+  // Fetch departments from database
+  const { data: dbDepartments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const departments = ['All Departments', ...dbDepartments.map(d => d.name)];
+
+  // Fetch staff from database for nominal roll
+  const { data: staffRecords = [], isLoading } = useQuery({
+    queryKey: ['nominal-roll-records'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select(`
+          *,
+          department:departments(name)
+        `)
+        .order('full_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const availableRoles = isSuperAdmin 
+    ? roles 
+    : roles.filter(r => r !== 'super_admin');
+
   const canExport = canAccess('staff', 'view');
 
-  const filteredRoll = mockNominalRoll.filter((record) => {
+  const filteredRoll = staffRecords.filter((record) => {
+    const staffDept = record.department?.name || '';
     const matchesSearch =
       record.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.rank.toLowerCase().includes(searchQuery.toLowerCase());
+      (record.position && record.position.toLowerCase().includes(searchQuery.toLowerCase()));
+    
     const matchesDepartment =
-      departmentFilter === 'All Departments' || record.department === departmentFilter;
+      departmentFilter === 'All Departments' || staffDept === departmentFilter;
+    
     const matchesGrade = gradeFilter === 'All Levels' || record.grade_level === parseInt(gradeFilter);
     const matchesRole = roleFilter === 'All Roles' || record.role === roleFilter;
+    
+    // Hide super_admin from non-super admins
+    if (!isSuperAdmin && record.role === 'super_admin') return false;
+    
     return matchesSearch && matchesDepartment && matchesGrade && matchesRole;
   });
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('en-US', {
       day: '2-digit',
       month: 'short',
@@ -191,10 +128,44 @@ function NominalRollPage() {
   };
 
   const stats = {
-    total: mockNominalRoll.length,
-    male: mockNominalRoll.filter((r) => r.gender === 'Male').length,
-    female: mockNominalRoll.filter((r) => r.gender === 'Female').length,
-    departments: new Set(mockNominalRoll.map((r) => r.department)).size,
+    total: filteredRoll.length,
+    male: filteredRoll.filter((r) => r.gender === 'male').length,
+    female: filteredRoll.filter((r) => r.gender === 'female').length,
+    departments: new Set(filteredRoll.map((r) => r.department?.name)).size,
+  };
+
+  const handleExportCSV = () => {
+    if (filteredRoll.length === 0) return;
+    
+    const headers = ["S/No", "Full Name", "Rank/Position", "Grade Level", "Step", "Department", "Role", "Employment Date", "Qualification", "Gender", "State"];
+    const rows = filteredRoll.map((r, i) => [
+      i + 1,
+      r.full_name,
+      r.position || r.rank || '',
+      r.grade_level,
+      r.step,
+      r.department?.name || 'N/A',
+      r.role,
+      r.employment_date || '',
+      r.qualification || '',
+      r.gender || '',
+      r.state || ''
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(e => e.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `GDU_Nominal_Roll_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -216,9 +187,9 @@ function NominalRollPage() {
               <Download className="mr-2 h-4 w-4" />
               Download PDF
             </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExportCSV}>
               <FileText className="mr-2 h-4 w-4" />
-              Export Excel
+              Export CSV
             </Button>
           </div>
         </div>
@@ -318,19 +289,17 @@ function NominalRollPage() {
                   </SelectContent>
                 </Select>
                 <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {role === 'All Roles'
-                          ? role
-                          : role.replace('_', ' ').toUpperCase()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role === 'All Roles' ? role : role.replace('_', ' ').toUpperCase()}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
               </div>
             </div>
           </CardHeader>
@@ -351,18 +320,18 @@ function NominalRollPage() {
                     <TableHead>State</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {filteredRoll.map((record) => (
-                    <TableRow key={record.s_no}>
-                      <TableCell className="font-medium">{record.s_no}</TableCell>
+                  <TableBody>
+                  {filteredRoll.map((record, index) => (
+                    <TableRow key={record.id}>
+                      <TableCell className="font-medium">{index + 1}</TableCell>
                       <TableCell className="font-medium">{record.full_name}</TableCell>
-                      <TableCell>{record.rank}</TableCell>
+                      <TableCell>{record.position || record.rank}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           Level {record.grade_level} / Step {record.step}
                         </Badge>
                       </TableCell>
-                      <TableCell>{record.department}</TableCell>
+                      <TableCell>{record.department?.name || 'N/A'}</TableCell>
                       <TableCell>
                         <Badge
                           variant={
@@ -377,9 +346,9 @@ function NominalRollPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>{formatDate(record.employment_date)}</TableCell>
-                      <TableCell className="text-sm">{record.qualification}</TableCell>
-                      <TableCell>{record.gender}</TableCell>
-                      <TableCell>{record.state}</TableCell>
+                      <TableCell className="text-sm">{record.qualification || '—'}</TableCell>
+                      <TableCell className="capitalize">{record.gender || '—'}</TableCell>
+                      <TableCell>{record.state || '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -417,15 +386,15 @@ function NominalRollPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRoll.map((record) => (
-                      <TableRow key={record.s_no}>
-                        <TableCell>{record.s_no}</TableCell>
+                    {filteredRoll.map((record, index) => (
+                      <TableRow key={record.id}>
+                        <TableCell>{index + 1}</TableCell>
                         <TableCell className="font-medium">{record.full_name}</TableCell>
-                        <TableCell>{record.rank}</TableCell>
+                        <TableCell>{record.position || record.rank}</TableCell>
                         <TableCell>
                           {record.grade_level}/{record.step}
                         </TableCell>
-                        <TableCell>{record.department}</TableCell>
+                        <TableCell>{record.department?.name || 'N/A'}</TableCell>
                         <TableCell>{record.role.toUpperCase()}</TableCell>
                         <TableCell>{formatDate(record.employment_date)}</TableCell>
                       </TableRow>

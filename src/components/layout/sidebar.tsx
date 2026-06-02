@@ -121,9 +121,10 @@ const navItems: NavItem[] = [
     label: 'System Settings',
     icon: Settings,
     href: '/dashboard/settings',
-    roles: ['super_admin'],
+    roles: ['staff', 'accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'],
     children: [
-      { label: 'General', icon: Settings, href: '/dashboard/settings', roles: ['super_admin'] },
+      { label: 'Account', icon: UserCircle, href: '/dashboard/settings', roles: ['staff', 'accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'] },
+      { label: 'General', icon: Settings, href: '/dashboard/settings/general', roles: ['super_admin'] },
       { label: 'Security', icon: Lock, href: '/dashboard/settings/security', roles: ['super_admin'] },
       { label: 'Branding', icon: Palette, href: '/dashboard/settings/branding', roles: ['super_admin'] },
       { label: 'Login Page', icon: ScanFace, href: '/dashboard/settings/login-page', roles: ['super_admin'] },
@@ -134,11 +135,26 @@ const navItems: NavItem[] = [
   },
 ];
 
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
 export function Sidebar() {
   const location = useLocation();
   const { profile, signOut, isSuperAdmin, isAdmin } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  const { data: branding } = useQuery({
+    queryKey: ['branding-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('branding_settings')
+        .select('*')
+        .single();
+      if (error) return null;
+      return data;
+    },
+  });
 
   const filteredNavItems = navItems.filter(
     (item) => !item.roles || (profile && item.roles.includes(profile.role))
@@ -152,6 +168,9 @@ export function Sidebar() {
 
   const isActive = (href: string) => location.pathname === href;
 
+  const logoUrl = branding?.logo_url || "/logo.png";
+  const portalName = branding?.portal_name || "GDU Portal";
+
   return (
     <aside
       className={cn(
@@ -162,11 +181,11 @@ export function Sidebar() {
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
-              <Shield className="h-5 w-5 text-primary-foreground" />
+            <div className="h-9 w-9 rounded-lg overflow-hidden flex items-center justify-center shadow-lg bg-white p-0.5">
+              <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-bold text-foreground">GDU Portal</span>
+              <span className="text-sm font-bold text-foreground">{portalName}</span>
               <span className="text-[10px] text-muted-foreground">Staff Management</span>
             </div>
           </div>

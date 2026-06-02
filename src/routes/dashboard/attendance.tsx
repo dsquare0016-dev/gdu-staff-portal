@@ -1,7 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +41,14 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Clock,
   Search,
   Filter,
@@ -53,9 +63,13 @@ import {
   FileText,
   Wifi,
   WifiOff,
+  ShieldCheck,
+  ShieldAlert,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 export const Route = createFileRoute('/dashboard/attendance')({
   head: () => ({
@@ -64,86 +78,12 @@ export const Route = createFileRoute('/dashboard/attendance')({
   component: AttendancePage,
 });
 
-const mockAttendance = [
-  {
-    id: '1',
-    staff_id: '1',
-    staff_name: 'Adebayo Johnson',
-    staff_email: 'adebayo.johnson@gdu.gov.ng',
-    date: '2026-05-30',
-    check_in: '08:15',
-    check_out: '17:30',
-    status: 'present',
-    late_minutes: 15,
-    department: 'Administration',
-  },
-  {
-    id: '2',
-    staff_id: '2',
-    staff_name: 'Grace Okonkwo',
-    staff_email: 'grace.okonkwo@gdu.gov.ng',
-    date: '2026-05-30',
-    check_in: '08:00',
-    check_out: null,
-    status: 'present',
-    late_minutes: 0,
-    department: 'Finance',
-  },
-  {
-    id: '3',
-    staff_id: '3',
-    staff_name: 'Emmanuel Obi',
-    staff_email: 'emmanuel.obi@gdu.gov.ng',
-    date: '2026-05-30',
-    check_in: '09:30',
-    check_out: null,
-    status: 'late',
-    late_minutes: 90,
-    department: 'ICT',
-  },
-  {
-    id: '4',
-    staff_id: '4',
-    staff_name: 'Fatima Bello',
-    staff_email: 'fatima.bello@gdu.gov.ng',
-    date: '2026-05-30',
-    check_in: null,
-    check_out: null,
-    status: 'absent',
-    late_minutes: 0,
-    department: 'Operations',
-  },
-  {
-    id: '5',
-    staff_id: '5',
-    staff_name: 'Chidi Okafor',
-    staff_email: 'chidi.okafor@gdu.gov.ng',
-    date: '2026-05-30',
-    check_in: '08:05',
-    check_out: '17:00',
-    status: 'present',
-    late_minutes: 5,
-    department: 'HR',
-  },
-  {
-    id: '6',
-    staff_id: '6',
-    staff_name: 'Amina Ibrahim',
-    staff_email: 'amina.ibrahim@gdu.gov.ng',
-    date: '2026-05-30',
-    check_in: null,
-    check_out: null,
-    status: 'leave',
-    late_minutes: 0,
-    department: 'Finance',
-  },
-];
 
-const departments = ['All Departments', 'Administration', 'Finance', 'ICT', 'Operations', 'HR'];
 const statuses = ['All Status', 'present', 'absent', 'late', 'leave', 'holiday'];
 
 function AttendancePage() {
   const { profile, canAccess } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [statusFilter, setStatusFilter] = useState('All Status');
@@ -151,15 +91,129 @@ function AttendancePage() {
   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
 
+  // Fetch departments from database
+  const { data: dbDepartments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const departments = ['All Departments', ...dbDepartments.map(d => d.name)];
+
+  // Fetch attendance from database
+  const { data: attendanceRecords = [], isLoading } = useQuery({
+    queryKey: ['attendance', date?.toISOString().split('T')[0]],
+    queryFn: async () => {
+      const dateStr = date?.toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('attendance')
+        .select(`
+          *,
+          staff:staff_records(
+            id,
+            full_name,
+            email,
+            role,
+            passport_url,
+            department:departments(name)
+          )
+        `)
+        .eq('date', dateStr);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!date,
+  });
+
   const canManageAttendance = canAccess('attendance', 'create') || canAccess('attendance', 'edit');
 
-  const filteredAttendance = mockAttendance.filter((record) => {
+  const updateAttendanceMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string, updates: any }) => {
+      const { error } = await supabase
+        .from('attendance')
+        .update(updates)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+    },
+    onError: (error) => {
+      toast.error('Failed to update attendance: ' + error.message);
+    },
+  });
+
+  const handleVerify = (record: any) => {
+    // Skip verification/approval requirement for TA, DG, ICT
+    const skipApprovalRoles = ['ta', 'dg', 'ict'];
+    const needsApproval = !skipApprovalRoles.includes(record.staff?.role || '');
+    
+    updateAttendanceMutation.mutate({
+      id: record.id,
+      updates: {
+        verified: true,
+        verified_by: profile?.id,
+        verified_at: new Date().toISOString(),
+        // If role is TA, DG, or ICT, it's auto-approved upon verification
+        approved: needsApproval ? record.approved : true,
+        approved_by: needsApproval ? record.approved_by : profile?.id,
+        approved_at: needsApproval ? record.approved_at : new Date().toISOString(),
+      }
+    });
+    
+    toast.success(`Attendance for ${record.staff?.full_name} verified`);
+  };
+
+  const handleDecline = (record: any, newStatus: string) => {
+    updateAttendanceMutation.mutate({
+      id: record.id,
+      updates: {
+        status: newStatus,
+        verified: false,
+        approved: false,
+        verified_by: null,
+        verified_at: null,
+        approved_by: null,
+        approved_at: null,
+      }
+    });
+    toast.error(`Attendance for ${record.staff?.full_name} declined and set to ${newStatus}`);
+  };
+
+  const handleApprove = (record: any) => {
+    updateAttendanceMutation.mutate({
+      id: record.id,
+      updates: {
+        approved: true,
+        approved_by: profile?.id,
+        approved_at: new Date().toISOString(),
+      }
+    });
+    toast.success(`Attendance for ${record.staff?.full_name} approved`);
+  };
+
+  const filteredAttendance = attendanceRecords.filter((record) => {
+    const staffName = record.staff?.full_name || '';
+    const staffEmail = record.staff?.email || '';
+    const staffDept = record.staff?.department?.name || '';
+
     const matchesSearch =
-      record.staff_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.staff_email.toLowerCase().includes(searchQuery.toLowerCase());
+      staffName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      staffEmail.toLowerCase().includes(searchQuery.toLowerCase());
+    
     const matchesDepartment =
-      departmentFilter === 'All Departments' || record.department === departmentFilter;
+      departmentFilter === 'All Departments' || staffDept === departmentFilter;
+    
     const matchesStatus = statusFilter === 'All Status' || record.status === statusFilter;
+    
     return matchesSearch && matchesDepartment && matchesStatus;
   });
 
@@ -195,13 +249,19 @@ function AttendancePage() {
   };
 
   const todayStats = {
-    present: mockAttendance.filter((r) => r.status === 'present').length,
-    absent: mockAttendance.filter((r) => r.status === 'absent').length,
-    late: mockAttendance.filter((r) => r.status === 'late').length,
-    onLeave: mockAttendance.filter((r) => r.status === 'leave').length,
+    present: attendanceRecords.filter((r) => r.status === 'present').length,
+    absent: attendanceRecords.filter((r) => r.status === 'absent').length,
+    late: attendanceRecords.filter((r) => r.status === 'late').length,
+    onLeave: attendanceRecords.filter((r) => r.status === 'leave').length,
   };
 
-  const presentRate = Math.round((todayStats.present / mockAttendance.length) * 100);
+  const totalRecords = attendanceRecords.length || 1;
+  const presentRate = Math.round((todayStats.present / totalRecords) * 100);
+
+  const formatTime = (isoString: string | null) => {
+    if (!isoString) return null;
+    return format(new Date(isoString), 'HH:mm');
+  };
 
   return (
     <DashboardLayout>
@@ -243,7 +303,10 @@ function AttendancePage() {
                     Mark attendance for {format(date || new Date(), 'PPP')}
                   </DialogDescription>
                 </DialogHeader>
-                <AttendanceForm onSuccess={() => setIsCheckInOpen(false)} />
+                <AttendanceForm onSuccess={() => {
+                  setIsCheckInOpen(false);
+                  queryClient.invalidateQueries({ queryKey: ['attendance'] });
+                }} />
               </DialogContent>
             </Dialog>
           </div>
@@ -385,81 +448,168 @@ function AttendancePage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Staff</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Check In</TableHead>
-                      <TableHead>Check Out</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Late Minutes</TableHead>
-                      {canManageAttendance && <TableHead className="text-right">Actions</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAttendance.map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs">
-                                {record.staff_name
-                                  .split(' ')
-                                  .map((n) => n[0])
-                                  .join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{record.staff_name}</p>
-                              <p className="text-xs text-muted-foreground">{record.staff_email}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>{record.department}</TableCell>
-                        <TableCell>
-                          {record.check_in ? (
-                            <div className="flex items-center gap-2">
-                              <LogIn className="h-4 w-4 text-green-500" />
-                              {record.check_in}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {record.check_out ? (
-                            <div className="flex items-center gap-2">
-                              <LogOut className="h-4 w-4 text-red-500" />
-                              {record.check_out}
-                            </div>
-                          ) : record.status === 'present' ? (
-                            <span className="text-xs text-muted-foreground">On duty</span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(record.status)}</TableCell>
-                        <TableCell>
-                          {record.late_minutes > 0 ? (
-                            <span className="text-yellow-600 font-medium">
-                              {record.late_minutes} min
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        {canManageAttendance && (
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">
-                              Edit
-                            </Button>
-                          </TableCell>
-                        )}
+                {isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+                    <p className="text-muted-foreground">Loading attendance records...</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Staff</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Check In</TableHead>
+                        <TableHead>Check Out</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Late Minutes</TableHead>
+                        <TableHead>Verification</TableHead>
+                        <TableHead>Approval</TableHead>
+                        {canManageAttendance && <TableHead className="text-right">Actions</TableHead>}
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAttendance.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9">
+                                <AvatarImage src={record.staff?.passport_url || undefined} />
+                                <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs">
+                                  {(record.staff?.full_name || 'U')
+                                    .split(' ')
+                                    .map((n: string) => n[0])
+                                    .join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">{record.staff?.full_name}</p>
+                                <p className="text-xs text-muted-foreground">{record.staff?.email}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{record.staff?.department?.name || 'N/A'}</TableCell>
+                          <TableCell>
+                            {record.check_in ? (
+                              <div className="flex items-center gap-2">
+                                <LogIn className="h-4 w-4 text-green-500" />
+                                {formatTime(record.check_in)}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {record.check_out ? (
+                              <div className="flex items-center gap-2">
+                                <LogOut className="h-4 w-4 text-red-500" />
+                                {formatTime(record.check_out)}
+                              </div>
+                            ) : record.status === 'present' ? (
+                              <span className="text-xs text-muted-foreground">On duty</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(record.status)}</TableCell>
+                          <TableCell>
+                            {record.late_minutes > 0 ? (
+                              <span className="text-yellow-600 font-medium">
+                                {record.late_minutes} min
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {record.verified ? (
+                              <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 gap-1">
+                                <ShieldCheck className="h-3 w-3" />
+                                Verified
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-gray-50 text-gray-400 border-gray-200 gap-1">
+                                Pending
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {record.approved ? (
+                              <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200 gap-1">
+                                <CheckCircle className="h-3 w-3" />
+                                Approved
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-yellow-50 text-yellow-600 border-yellow-200 gap-1">
+                                Pending
+                              </Badge>
+                            )}
+                          </TableCell>
+                          {canManageAttendance && (
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                {!record.verified && (
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 text-xs border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                                      onClick={() => handleVerify(record)}
+                                    >
+                                      Verify
+                                    </Button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-8 text-xs text-destructive border-destructive/20 hover:bg-destructive/10">
+                                          Decline
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent>
+                                        <DropdownMenuLabel>Choose Status</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => handleDecline(record, 'absent')}>
+                                          Mark Absent
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDecline(record, 'late')}>
+                                          Mark Late
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDecline(record, 'leave')}>
+                                          Mark On Leave
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                )}
+                                {record.verified && !record.approved && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 text-xs border-green-200 hover:bg-green-50 hover:text-green-600"
+                                    onClick={() => handleApprove(record)}
+                                  >
+                                    Approve
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="sm" className="h-8 text-xs">
+                                  Edit
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                {!isLoading && filteredAttendance.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <UserCheck className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold">No attendance records found</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      No records for this date or criteria
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -502,9 +652,48 @@ function AttendancePage() {
 function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
   const [selectedStaff, setSelectedStaff] = useState('');
   const [attendanceStatus, setAttendanceStatus] = useState('present');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { data: staffRecords = [] } = useQuery({
+    queryKey: ['staff-records-lite'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select('id, full_name')
+        .eq('status', 'active')
+        .order('full_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaff) return toast.error('Please select a staff member');
+    
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('attendance')
+        .insert([{
+          staff_id: selectedStaff,
+          date: new Date().toISOString().split('T')[0],
+          status: attendanceStatus,
+          check_in: attendanceStatus === 'present' ? new Date().toISOString() : null,
+        }]);
+
+      if (error) throw error;
+      toast.success('Attendance recorded successfully');
+      onSuccess();
+    } catch (error: any) {
+      toast.error('Failed to record attendance: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <div className="grid gap-4 py-4">
+    <form onSubmit={handleSubmit} className="grid gap-4 py-4">
       <div className="space-y-2">
         <label className="text-sm font-medium">Select Staff</label>
         <Select value={selectedStaff} onValueChange={setSelectedStaff}>
@@ -512,10 +701,11 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
             <SelectValue placeholder="Choose staff member" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="1">Adebayo Johnson</SelectItem>
-            <SelectItem value="2">Grace Okonkwo</SelectItem>
-            <SelectItem value="3">Emmanuel Obi</SelectItem>
-            <SelectItem value="4">Fatima Bello</SelectItem>
+            {staffRecords.map((staff) => (
+              <SelectItem key={staff.id} value={staff.id}>
+                {staff.full_name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -537,7 +727,7 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Check In Time</label>
-          <Input type="time" defaultValue="08:00" />
+          <Input type="time" defaultValue={format(new Date(), 'HH:mm')} />
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Check Out Time</label>
@@ -549,11 +739,14 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
         <Input placeholder="Add any notes..." />
       </div>
       <div className="flex justify-end gap-3 mt-4">
-        <Button variant="outline" onClick={onSuccess}>
+        <Button variant="outline" type="button" onClick={onSuccess}>
           Cancel
         </Button>
-        <Button>Save Record</Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Save Record
+        </Button>
       </div>
-    </div>
+    </form>
   );
 }

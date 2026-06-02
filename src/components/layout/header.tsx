@@ -44,6 +44,14 @@ interface Notification {
 
 const mockNotifications: Notification[] = [
   {
+    id: 'retirement-1',
+    title: 'Retirement Alert',
+    body: 'David Adeyemi is approaching retirement (2045-04-01).',
+    time: 'Just now',
+    isRead: false,
+    type: 'system',
+  },
+  {
     id: '1',
     title: 'Attendance Marked',
     body: 'Your attendance for today has been recorded',

@@ -1,7 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,6 +63,8 @@ import {
   Phone,
   Building2,
   Briefcase,
+  Clock,
+  Loader2,
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
@@ -71,144 +76,89 @@ export const Route = createFileRoute('/dashboard/staff')({
   component: StaffManagementPage,
 });
 
-const mockStaff = [
-  {
-    id: '1',
-    full_name: 'Adebayo Johnson',
-    email: 'adebayo.johnson@gdu.gov.ng',
-    phone: '+234 801 234 5678',
-    department: 'Administration',
-    position: 'Senior Administrative Officer',
-    role: 'admin',
-    grade_level: 8,
-    step: 4,
-    status: 'active',
-    passport_url: null,
-    employment_date: '2019-03-15',
-  },
-  {
-    id: '2',
-    full_name: 'Grace Okonkwo',
-    email: 'grace.okonkwo@gdu.gov.ng',
-    phone: '+234 802 345 6789',
-    department: 'Finance',
-    position: 'Chief Financial Officer',
-    role: 'accounts',
-    grade_level: 12,
-    step: 6,
-    status: 'active',
-    passport_url: null,
-    employment_date: '2015-07-01',
-  },
-  {
-    id: '3',
-    full_name: 'Emmanuel Obi',
-    email: 'emmanuel.obi@gdu.gov.ng',
-    phone: '+234 803 456 7890',
-    department: 'ICT',
-    position: 'ICT Director',
-    role: 'ict',
-    grade_level: 14,
-    step: 2,
-    status: 'active',
-    passport_url: null,
-    employment_date: '2012-01-10',
-  },
-  {
-    id: '4',
-    full_name: 'Fatima Bello',
-    email: 'fatima.bello@gdu.gov.ng',
-    phone: '+234 804 567 8901',
-    department: 'Operations',
-    position: 'Operations Manager',
-    role: 'staff',
-    grade_level: 9,
-    step: 3,
-    status: 'active',
-    passport_url: null,
-    employment_date: '2018-05-22',
-  },
-  {
-    id: '5',
-    full_name: 'Chidi Okafor',
-    email: 'chidi.okafor@gdu.gov.ng',
-    phone: '+234 805 678 9012',
-    department: 'HR',
-    position: 'HR Manager',
-    role: 'admin',
-    grade_level: 10,
-    step: 5,
-    status: 'active',
-    passport_url: null,
-    employment_date: '2017-09-01',
-  },
-  {
-    id: '6',
-    full_name: 'Amina Ibrahim',
-    email: 'amina.ibrahim@gdu.gov.ng',
-    phone: '+234 806 789 0123',
-    department: 'Finance',
-    position: 'Accountant',
-    role: 'accounts',
-    grade_level: 7,
-    step: 2,
-    status: 'active',
-    passport_url: null,
-    employment_date: '2020-11-15',
-  },
-  {
-    id: '7',
-    full_name: 'David Adeyemi',
-    email: 'david.adeyemi@gdu.gov.ng',
-    phone: '+234 807 890 1234',
-    department: 'Administration',
-    position: 'Director General',
-    role: 'dg',
-    grade_level: 17,
-    step: 1,
-    status: 'active',
-    passport_url: null,
-    employment_date: '2010-04-01',
-  },
-  {
-    id: '8',
-    full_name: 'Blessing Eze',
-    email: 'blessing.eze@gdu.gov.ng',
-    phone: '+234 808 901 2345',
-    department: 'Operations',
-    position: 'Field Officer',
-    role: 'staff',
-    grade_level: 5,
-    step: 1,
-    status: 'inactive',
-    passport_url: null,
-    employment_date: '2021-03-10',
-  },
-];
-
-const departments = ['All Departments', 'Administration', 'Finance', 'ICT', 'Operations', 'HR'];
 const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'ta', 'ict', 'staff'];
 const statuses = ['All Status', 'active', 'inactive', 'suspended', 'retired'];
 
 function StaffManagementPage() {
-  const { canAccess } = useAuth();
+  const { profile, canAccess, isSuperAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
+  // Fetch departments from database
+  const { data: dbDepartments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const departments = ['All Departments', ...dbDepartments.map(d => d.name)];
+
+  // Fetch staff from database
+  const { data: staffRecords = [], isLoading } = useQuery({
+    queryKey: ['staff-records'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select(`
+          *,
+          department:departments(name)
+        `)
+        .order('full_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const deleteStaffMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('staff_records')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff-records'] });
+      toast.success('Staff record deleted successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to delete staff: ' + error.message);
+    },
+  });
+
   const canManageStaff = canAccess('staff', 'create') || canAccess('staff', 'edit');
 
-  const filteredStaff = mockStaff.filter((staff) => {
+  const availableRoles = isSuperAdmin 
+    ? roles 
+    : roles.filter(r => r !== 'super_admin');
+
+  const filteredStaff = staffRecords.filter((staff) => {
     const matchesSearch =
       staff.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       staff.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      staff.phone.includes(searchQuery);
+      (staff.phone && staff.phone.includes(searchQuery));
+    
+    const staffDept = typeof staff.department === 'object' ? staff.department?.name : staff.department;
     const matchesDepartment =
-      departmentFilter === 'All Departments' || staff.department === departmentFilter;
+      departmentFilter === 'All Departments' || staffDept === departmentFilter;
+    
     const matchesRole = roleFilter === 'All Roles' || staff.role === roleFilter;
     const matchesStatus = statusFilter === 'All Status' || staff.status === statusFilter;
+    
+    // Hide super_admin from non-super admins
+    if (!isSuperAdmin && staff.role === 'super_admin') return false;
+    
     return matchesSearch && matchesDepartment && matchesRole && matchesStatus;
   });
 
@@ -227,7 +177,8 @@ function StaffManagementPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -269,7 +220,14 @@ function StaffManagementPage() {
                       Fill in the staff details below to create a new staff record.
                     </DialogDescription>
                   </DialogHeader>
-                  <StaffForm onSuccess={() => setIsAddDialogOpen(false)} />
+                  <StaffForm 
+                    departments={dbDepartments} 
+                    availableRoles={availableRoles}
+                    onSuccess={() => {
+                      setIsAddDialogOpen(false);
+                      queryClient.invalidateQueries({ queryKey: ['staff-records'] });
+                    }} 
+                  />
                 </DialogContent>
               </Dialog>
             </div>
@@ -315,7 +273,7 @@ function StaffManagementPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {roles.map((role) => (
+                        {availableRoles.map((role) => (
                           <SelectItem key={role} value={role}>
                             {role === 'All Roles' ? role : role.replace('_', ' ').toUpperCase()}
                           </SelectItem>
@@ -338,108 +296,129 @@ function StaffManagementPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Staff</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Grade Level</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Employment Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredStaff.map((staff) => (
-                      <TableRow key={staff.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={staff.passport_url || undefined} />
-                              <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground">
-                                {staff.full_name
-                                  .split(' ')
-                                  .map((n) => n[0])
-                                  .join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{staff.full_name}</p>
-                              <p className="text-xs text-muted-foreground">{staff.email}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-muted-foreground" />
-                            {staff.department}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getRoleBadgeVariant(staff.role)}>
-                            {staff.role.replace('_', ' ').toUpperCase()}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Briefcase className="h-4 w-4 text-muted-foreground" />
-                            Level {staff.grade_level} / Step {staff.step}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={staff.status === 'active' ? 'default' : 'secondary'}
-                            className={cn(
-                              staff.status === 'active' && 'bg-green-500/10 text-green-600 border-green-500/20',
-                              staff.status === 'inactive' && 'bg-gray-500/10 text-gray-600 border-gray-500/20'
-                            )}
-                          >
-                            {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatDate(staff.employment_date)}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem asChild>
-                                <Link to={`/dashboard/staff/${staff.id}`} className="cursor-pointer">
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  View Details
-                                </Link>
-                              </DropdownMenuItem>
-                              {canManageStaff && (
-                                <>
-                                  <DropdownMenuItem className="cursor-pointer">
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit Staff
-                                                          </DropdownMenuItem>
-                                                          <DropdownMenuItem className="cursor-pointer">
-                                    <Mail className="mr-2 h-4 w-4" />
-                                    Send Message
-                                                          </DropdownMenuItem>
-                                </>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer">
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                {isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+                    <p className="text-muted-foreground">Loading staff records...</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Staff</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Role</TableHead>
+                        <TableHead>Grade Level</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Employment Date</TableHead>
+                        <TableHead>Retirement Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {filteredStaff.length === 0 && (
+                    </TableHeader>
+                    <TableBody>
+                      {filteredStaff.map((staff) => (
+                        <TableRow key={staff.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src={staff.passport_url || undefined} />
+                                <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground">
+                                  {staff.full_name
+                                    .split(' ')
+                                    .map((n: string) => n[0])
+                                    .join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">{staff.full_name}</p>
+                                <p className="text-xs text-muted-foreground">{staff.email}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              {typeof staff.department === 'object' ? staff.department?.name : (staff.department || 'N/A')}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getRoleBadgeVariant(staff.role)}>
+                              {staff.role.replace('_', ' ').toUpperCase()}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Briefcase className="h-4 w-4 text-muted-foreground" />
+                              Level {staff.grade_level} / Step {staff.step}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={staff.status === 'active' ? 'default' : 'secondary'}
+                              className={cn(
+                                staff.status === 'active' && 'bg-green-500/10 text-green-600 border-green-500/20',
+                                staff.status === 'inactive' && 'bg-gray-500/10 text-gray-600 border-gray-500/20'
+                              )}
+                            >
+                              {staff.status.charAt(0).toUpperCase() + staff.status.slice(1)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{formatDate(staff.employment_date)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              {staff.retirement_date ? formatDate(staff.retirement_date) : '—'}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link to={`/dashboard/staff/${staff.id}`} className="cursor-pointer">
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View Details
+                                  </Link>
+                                </DropdownMenuItem>
+                                {canManageStaff && (
+                                  <>
+                                    <DropdownMenuItem className="cursor-pointer">
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit Staff
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer">
+                                      <Mail className="mr-2 h-4 w-4" />
+                                      Send Message
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  className="text-destructive focus:text-destructive cursor-pointer"
+                                  onClick={() => {
+                                    if (confirm(`Are you sure you want to delete ${staff.full_name}?`)) {
+                                      deleteStaffMutation.mutate(staff.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                {!isLoading && filteredStaff.length === 0 && (
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Users className="h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-lg font-semibold">No staff found</h3>
@@ -477,121 +456,249 @@ function StaffManagementPage() {
   );
 }
 
-function StaffForm({ onSuccess }: { onSuccess: () => void }) {
+function StaffForm({ 
+  onSuccess, 
+  departments, 
+  availableRoles 
+}: { 
+  onSuccess: () => void;
+  departments: any[];
+  availableRoles: string[];
+}) {
+  const queryClient = useQueryClient();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    department_id: '',
+    position: '',
+    role: 'staff',
+    grade_level: '8',
+    step: '1',
+    employment_date: new Date().toISOString().split('T')[0],
+    retirement_date: '',
+    gender: 'male',
+    date_of_birth: '',
+    qualification: '',
+    state: '',
+    lga: '',
+    address: '',
+    next_of_kin_name: '',
+    next_of_kin_phone: '',
+    next_of_kin_rel: '',
+    passport_url: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .insert([{
+          ...formData,
+          grade_level: parseInt(formData.grade_level),
+          step: parseInt(formData.step),
+          retirement_date: formData.retirement_date || null,
+        }])
+        .select();
+
+      if (error) throw error;
+
+      toast.success('Staff member added successfully');
+      onSuccess();
+    } catch (error: any) {
+      toast.error('Failed to add staff: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsSubmitting(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `passport-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `passports/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('assets')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('assets')
+        .getPublicUrl(filePath);
+
+      setFormData({ ...formData, passport_url: publicUrl });
+      toast.success('Passport photo uploaded');
+    } catch (error: any) {
+      toast.error('Error uploading passport: ' + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="grid gap-4 py-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label htmlFor="fullName" className="text-sm font-medium">
-            Full Name
-          </label>
-          <Input id="fullName" placeholder="Enter full name" />
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-medium">
-            Email
-          </label>
-          <Input id="email" type="email" placeholder="Enter email address" />
-        </div>
+    <form onSubmit={handleSubmit} className="space-y-6 py-4">
+      <div className="max-h-[70vh] overflow-y-auto pr-4 space-y-8">
+        <section className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Personal Information
+          </h3>
+          <div className="flex flex-col md:flex-row gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Passport Photograph</label>
+              <div className="h-32 w-32 rounded-xl border-2 border-dashed flex items-center justify-center bg-muted/50 overflow-hidden relative group">
+                {formData.passport_url ? (
+                  <img src={formData.passport_url} alt="Passport" className="h-full w-full object-cover" />
+                ) : (
+                  <Plus className="h-8 w-8 text-muted-foreground" />
+                )}
+                <label 
+                  htmlFor="passport-upload" 
+                  className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer text-[10px]"
+                >
+                  Click to upload
+                </label>
+                <input id="passport-upload" type="file" className="hidden" accept="image/*" onChange={handlePassportUpload} />
+              </div>
+            </div>
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Full Name</label>
+                <Input 
+                  required 
+                  value={formData.full_name} 
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} 
+                  placeholder="e.g. Adebayo Johnson"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email Address</label>
+                <Input 
+                  required 
+                  type="email" 
+                  value={formData.email} 
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
+                  placeholder="name@gdu.gov.ng"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Phone Number</label>
+                <Input 
+                  value={formData.phone} 
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
+                  placeholder="+234..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Gender</label>
+                <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Date of Birth</label>
+                <Input 
+                  type="date" 
+                  value={formData.date_of_birth} 
+                  onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })} 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Qualification</label>
+                <Input 
+                  value={formData.qualification} 
+                  onChange={(e) => setFormData({ ...formData, qualification: e.target.value })} 
+                  placeholder="e.g. M.Sc Computer Science"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            Employment Details
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Department</label>
+              <Select value={formData.department_id} onValueChange={(v) => setFormData({ ...formData, department_id: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Position/Rank</label>
+              <Input value={formData.position} onChange={(e) => setFormData({ ...formData, position: e.target.value })} placeholder="e.g. Senior Officer" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">System Role</label>
+              <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableRoles.filter(r => r !== 'All Roles').map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Grade Level</label>
+                <Select value={formData.grade_level} onValueChange={(v) => setFormData({ ...formData, grade_level: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 17 }, (_, i) => (i + 1).toString()).map(l => <SelectItem key={l} value={l}>Level {l}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Step</label>
+                <Select value={formData.step} onValueChange={(v) => setFormData({ ...formData, step: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 15 }, (_, i) => (i + 1).toString()).map(s => <SelectItem key={s} value={s}>Step {s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Employment Date</label>
+              <Input type="date" value={formData.employment_date} onChange={(e) => setFormData({ ...formData, employment_date: e.target.value })} />
+            </div>
+          </div>
+        </section>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label htmlFor="phone" className="text-sm font-medium">
-            Phone Number
-          </label>
-          <Input id="phone" placeholder="Enter phone number" />
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="department" className="text-sm font-medium">
-            Department
-          </label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {departments.slice(1).map((dept) => (
-                <SelectItem key={dept} value={dept}>
-                  {dept}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label htmlFor="position" className="text-sm font-medium">
-            Position
-          </label>
-          <Input id="position" placeholder="Enter position" />
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="role" className="text-sm font-medium">
-            Role
-          </label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              {roles.slice(1).map((role) => (
-                <SelectItem key={role} value={role}>
-                  {role.replace('_', ' ').toUpperCase()}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-2">
-          <label htmlFor="gradeLevel" className="text-sm font-medium">
-            Grade Level
-          </label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Level" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 17 }, (_, i) => i + 1).map((level) => (
-                <SelectItem key={level} value={String(level)}>
-                  Level {level}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="step" className="text-sm font-medium">
-            Step
-          </label>
-          <Select>
-            <SelectTrigger>
-              <SelectValue placeholder="Step" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 15 }, (_, i) => i + 1).map((step) => (
-                <SelectItem key={step} value={String(step)}>
-                  Step {step}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="employmentDate" className="text-sm font-medium">
-            Employment Date
-          </label>
-          <Input id="employmentDate" type="date" />
-        </div>
-      </div>
-      <div className="flex justify-end gap-3 mt-4">
-        <Button variant="outline" onClick={onSuccess}>
-          Cancel
+
+      <div className="flex justify-end gap-3 pt-4 border-t">
+        <Button variant="outline" type="button" onClick={onSuccess}>Cancel</Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Register Staff Member
         </Button>
-        <Button>Create Staff</Button>
       </div>
-    </div>
+    </form>
   );
 }

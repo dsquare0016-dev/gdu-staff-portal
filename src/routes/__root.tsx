@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/hooks/use-auth";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import appCss from "../styles.css?url";
 
@@ -44,8 +45,21 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+        <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-left">
+          <p className="text-xs font-mono text-destructive break-words">
+            {error.message || 'An unknown error occurred'}
+          </p>
+          {error.stack && (
+            <details className="mt-2">
+              <summary className="text-[10px] text-muted-foreground cursor-pointer uppercase tracking-wider">Stack Trace</summary>
+              <pre className="mt-2 text-[10px] overflow-auto max-h-40 text-muted-foreground">
+                {error.stack}
+              </pre>
+            </details>
+          )}
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Something went wrong. You can try refreshing or head back home.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
@@ -120,8 +134,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Outlet />
-        <Toaster richColors position="top-right" />
+        <TooltipProvider>
+          <Outlet />
+          <Toaster richColors position="top-right" />
+        </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
