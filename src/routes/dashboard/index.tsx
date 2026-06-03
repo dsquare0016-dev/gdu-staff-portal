@@ -17,7 +17,10 @@ import {
   UserPlus,
   MessageSquare,
   Loader2,
+  Wallet,
+  QrCode,
 } from 'lucide-react';
+import { QRGenerator } from '@/components/attendance/qr-generator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -90,6 +93,23 @@ function DashboardPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Fetch personal allowances for staff
+  const { data: myAllowances = [] } = useQuery({
+    queryKey: ['my-allowances', profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return [];
+      const { data, error } = await supabase
+        .from('allowances')
+        .select('*')
+        .eq('staff_id', profile.id)
+        .order('payment_date', { descending: true })
+        .limit(3);
+      if (error) throw error;
+      return data;
+    },
+    enabled: userIsStaff && !!profile?.id,
+  });
 
   // Admin/Global Stats
   const { data: staffStats } = useQuery({
@@ -248,32 +268,97 @@ function DashboardPage() {
 
         {/* Staff Personal Stats */}
         {userIsStaff && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="My Attendance Rate"
-              value={`${personalStats?.attendanceRate || 0}%`}
-              icon={CheckCircle}
-              trend="+1.2%"
-              description="this month"
-            />
-            <StatCard
-              title="Total Present"
-              value={personalStats?.totalPresent || 0}
-              icon={Users}
-              description="approved days"
-            />
-            <StatCard
-              title="Last Check-in"
-              value={personalStats?.lastCheckIn ? new Date(personalStats.lastCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-              icon={Clock}
-              description="most recent"
-            />
-            <StatCard
-              title="Leave Balance"
-              value="12 Days"
-              icon={Calendar}
-              description="available this year"
-            />
+          <div className="grid gap-6 md:grid-cols-12">
+            <div className="md:col-span-8 space-y-6">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <StatCard
+                  title="Attendance Rate"
+                  value={`${personalStats?.attendanceRate || 0}%`}
+                  icon={CheckCircle}
+                  description="Overall presence"
+                />
+                <StatCard
+                  title="Total Present"
+                  value={personalStats?.totalPresent.toString() || '0'}
+                  icon={Activity}
+                  description="Days recorded"
+                />
+                <StatCard
+                  title="Last Check-in"
+                  value={personalStats?.lastCheckIn ? new Date(personalStats.lastCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'None'}
+                  icon={Clock}
+                  description="Today's status"
+                />
+              </div>
+
+              {/* Personal Allowances Card */}
+              <Card className="border shadow-sm">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Wallet className="h-5 w-5 text-primary" />
+                    My Recent Allowances
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to="/dashboard/allowances">View All</Link>
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {myAllowances.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">No allowances processed yet.</p>
+                    ) : (
+                      myAllowances.map((item: any) => (
+                        <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-muted/50">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <DollarSign className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">{item.title}</p>
+                              <p className="text-[10px] text-muted-foreground uppercase">{new Date(item.payment_date).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <p className="text-sm font-black text-slate-900">₦{item.amount.toLocaleString()}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="md:col-span-4">
+              <Card className="border shadow-xl bg-gradient-to-br from-primary/5 via-white to-white overflow-hidden sticky top-24">
+                <div className="absolute top-0 right-0 p-8 opacity-5">
+                  <QrCode className="h-32 w-32" />
+                </div>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <QrCode className="h-5 w-5 text-primary" />
+                    Digital Staff ID
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center gap-4 pt-4">
+                  <div className="p-4 bg-white rounded-2xl shadow-lg border-2 border-primary/10">
+                    <QRGenerator 
+                      staffId={profile?.readable_id || 'GDU-PENDING'} 
+                      name={profile?.full_name || ''} 
+                      department={profile?.department?.name || 'General'} 
+                      role={profile?.role || 'staff'}
+                      size={180}
+                    />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-lg font-black text-slate-900 uppercase italic tracking-tight">{profile?.full_name}</p>
+                    <p className="text-xs font-bold text-primary uppercase tracking-widest">{profile?.position}</p>
+                  </div>
+                  <div className="w-full h-[1px] bg-slate-100 my-2" />
+                  <p className="text-[10px] text-muted-foreground px-6 text-center leading-relaxed font-medium">
+                    Show this QR code to the portal scanner at the entrance to record your daily attendance.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
 

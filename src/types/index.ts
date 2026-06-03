@@ -1,4 +1,4 @@
-export type UserRole = 'staff' | 'accounts' | 'admin' | 'dg' | 'ta' | 'ict' | 'super_admin';
+export type UserRole = 'staff' | 'accounts' | 'admin' | 'dg' | 'ta' | 'ict' | 'super_admin' | 'adhoc';
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'leave' | 'holiday';
 
@@ -22,6 +22,7 @@ export interface Profile {
   created_at: string;
   updated_at: string;
   staff_id?: string;
+  readable_id?: string;
 }
 
 export interface Department {
@@ -39,6 +40,7 @@ export interface Department {
 export interface StaffRecord {
   id: string;
   user_id: string | null;
+  readable_id: string | null;
   full_name: string;
   passport_url: string | null;
   rank: string | null;
@@ -61,6 +63,7 @@ export interface StaffRecord {
   next_of_kin_phone: string | null;
   next_of_kin_rel: string | null;
   retirement_date: string | null;
+  adhoc_expiry: string | null;
   status: 'active' | 'inactive' | 'suspended' | 'retired';
   created_by: string | null;
   created_at: string;

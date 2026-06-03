@@ -23,6 +23,7 @@ import { Route as DashboardDepartmentsRouteImport } from './routes/dashboard/dep
 import { Route as DashboardChatRouteImport } from './routes/dashboard/chat'
 import { Route as DashboardAttendanceRouteImport } from './routes/dashboard/attendance'
 import { Route as DashboardAnnouncementsRouteImport } from './routes/dashboard/announcements'
+import { Route as DashboardAllowancesRouteImport } from './routes/dashboard/allowances'
 import { Route as DashboardAiAssistantRouteImport } from './routes/dashboard/ai-assistant'
 import { Route as DashboardSettingsIndexRouteImport } from './routes/dashboard/settings/index'
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
@@ -103,6 +104,11 @@ const DashboardAnnouncementsRoute = DashboardAnnouncementsRouteImport.update({
   path: '/dashboard/announcements',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardAllowancesRoute = DashboardAllowancesRouteImport.update({
+  id: '/dashboard/allowances',
+  path: '/dashboard/allowances',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardAiAssistantRoute = DashboardAiAssistantRouteImport.update({
   id: '/dashboard/ai-assistant',
   path: '/dashboard/ai-assistant',
@@ -157,6 +163,7 @@ const DashboardSettingsAuditLogsRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
+  '/dashboard/allowances': typeof DashboardAllowancesRoute
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
   '/dashboard/attendance': typeof DashboardAttendanceRoute
   '/dashboard/chat': typeof DashboardChatRoute
@@ -182,6 +189,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
+  '/dashboard/allowances': typeof DashboardAllowancesRoute
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
   '/dashboard/attendance': typeof DashboardAttendanceRoute
   '/dashboard/chat': typeof DashboardChatRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
+  '/dashboard/allowances': typeof DashboardAllowancesRoute
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
   '/dashboard/attendance': typeof DashboardAttendanceRoute
   '/dashboard/chat': typeof DashboardChatRoute
@@ -234,6 +243,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/dashboard/ai-assistant'
+    | '/dashboard/allowances'
     | '/dashboard/announcements'
     | '/dashboard/attendance'
     | '/dashboard/chat'
@@ -259,6 +269,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/dashboard/ai-assistant'
+    | '/dashboard/allowances'
     | '/dashboard/announcements'
     | '/dashboard/attendance'
     | '/dashboard/chat'
@@ -283,6 +294,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/dashboard/ai-assistant'
+    | '/dashboard/allowances'
     | '/dashboard/announcements'
     | '/dashboard/attendance'
     | '/dashboard/chat'
@@ -309,6 +321,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardAiAssistantRoute: typeof DashboardAiAssistantRoute
+  DashboardAllowancesRoute: typeof DashboardAllowancesRoute
   DashboardAnnouncementsRoute: typeof DashboardAnnouncementsRoute
   DashboardAttendanceRoute: typeof DashboardAttendanceRoute
   DashboardChatRoute: typeof DashboardChatRoute
@@ -424,6 +437,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAnnouncementsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/allowances': {
+      id: '/dashboard/allowances'
+      path: '/dashboard/allowances'
+      fullPath: '/dashboard/allowances'
+      preLoaderRoute: typeof DashboardAllowancesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/ai-assistant': {
       id: '/dashboard/ai-assistant'
       path: '/dashboard/ai-assistant'
@@ -518,6 +538,7 @@ const DashboardSettingsRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardAiAssistantRoute: DashboardAiAssistantRoute,
+  DashboardAllowancesRoute: DashboardAllowancesRoute,
   DashboardAnnouncementsRoute: DashboardAnnouncementsRoute,
   DashboardAttendanceRoute: DashboardAttendanceRoute,
   DashboardChatRoute: DashboardChatRoute,

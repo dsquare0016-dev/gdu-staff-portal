@@ -10,7 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- ENUMS
 -- ============================================================
 CREATE TYPE user_role AS ENUM (
-  'staff', 'accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'
+  'staff', 'accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin', 'adhoc'
 );
 
 CREATE TYPE attendance_status AS ENUM ('present', 'absent', 'late', 'leave', 'holiday');
@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS public.role_permissions (
 CREATE TABLE IF NOT EXISTS public.staff_records (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id           UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  readable_id       TEXT UNIQUE, -- GDU001, GDU002, etc.
   full_name         TEXT NOT NULL,
   passport_url      TEXT,
   rank              TEXT,
@@ -115,6 +116,7 @@ CREATE TABLE IF NOT EXISTS public.staff_records (
   next_of_kin_phone TEXT,
   next_of_kin_rel   TEXT,
   retirement_date   DATE,
+  adhoc_expiry      DATE,
   status            TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'suspended', 'retired')),
   created_by        UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),

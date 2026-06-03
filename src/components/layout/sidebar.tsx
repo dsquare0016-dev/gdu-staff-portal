@@ -27,6 +27,7 @@ import {
   Palette,
   UserPlus,
   ClipboardList,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,12 @@ const navItems: NavItem[] = [
     icon: Wallet,
     href: '/dashboard/payroll',
     roles: ['accounts', 'admin', 'super_admin', 'dg', 'ta', 'ict'],
+  },
+  {
+    label: 'Allowances',
+    icon: Wallet,
+    href: '/dashboard/allowances',
+    roles: ['staff', 'accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'],
   },
   {
     label: 'Departments',

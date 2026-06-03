@@ -18,10 +18,11 @@ CREATE TABLE IF NOT EXISTS public.departments (
 CREATE TABLE IF NOT EXISTS public.staff_records (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    readable_id TEXT UNIQUE, -- GDU001, GDU002, etc.
     full_name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     phone TEXT,
-    role TEXT NOT NULL DEFAULT 'staff', -- super_admin, admin, ict, accounts, dg, ta, staff
+    role TEXT NOT NULL DEFAULT 'staff', -- super_admin, admin, ict, accounts, dg, ta, staff, adhoc
     department_id UUID REFERENCES public.departments(id),
     position TEXT,
     grade_level INTEGER,
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.staff_records (
     qualification TEXT,
     employment_date DATE DEFAULT CURRENT_DATE,
     retirement_date DATE,
+    adhoc_expiry DATE,
     address TEXT,
     next_of_kin_name TEXT,
     next_of_kin_phone TEXT,

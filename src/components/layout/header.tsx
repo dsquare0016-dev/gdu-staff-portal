@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
+import { ModeToggle } from '@/components/mode-toggle';
 import {
   Bell,
   Search,
@@ -80,7 +81,6 @@ const mockNotifications: Notification[] = [
 export function Header() {
   const { profile, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDark, setIsDark] = useState(false);
   const unreadCount = mockNotifications.filter((n) => !n.isRead).length;
 
   return (
@@ -97,20 +97,13 @@ export function Header() {
               placeholder="Search staff, records, documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-primary/5 border-primary/20 focus:bg-background transition-colors"
+              className="pl-10 bg-primary/5 border-primary/20 focus:bg-background transition-colors h-9"
             />
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsDark(!isDark)}
-            className="text-muted-foreground"
-          >
-            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </Button>
+          <ModeToggle />
 
           <Button variant="ghost" size="icon" className="text-muted-foreground">
             <HelpCircle className="h-5 w-5" />

@@ -97,16 +97,16 @@ function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await signIn(email, password, role);
-    setLoading(false);
-    
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { error } = await signIn(email, password, role);
+      if (error) throw error;
+      toast.success("Welcome back");
+      navigate({ to: "/dashboard" });
+    } catch (error: any) {
+      toast.error(error.message || "Invalid login credentials");
+    } finally {
+      setLoading(false);
     }
-
-    toast.success("Welcome back");
-    navigate({ to: "/dashboard" });
   };
 
   const heroTitle = branding?.hero_title || "GOVERNMENT DELIVERY UNIT (GDU)";
@@ -118,7 +118,7 @@ function LoginPage() {
   const logoUrl = branding?.logo_url || "/logo.png";
   const logoUrl2 = (branding as any)?.logo_url_2 || "/logo.png";
   const logoUrl3 = (branding as any)?.logo_url_3 || "/logo.png";
-  const bgUrl = branding?.login_bg_url || loginBg;
+  const bgUrl = loginSettings?.login_bg_url || loginBg;
 
   return (
     <main className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-2 bg-background">

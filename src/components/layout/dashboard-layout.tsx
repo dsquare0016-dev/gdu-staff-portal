@@ -1,30 +1,29 @@
 import { Sidebar } from './sidebar';
 import { Header } from './header';
 import { useAuth } from '@/lib/hooks/use-auth';
-import { useNavigate } from '@tanstack/react-router';
-import { Loader2 } from 'lucide-react';
+import { useNavigate, useLocation } from '@tanstack/react-router';
+import { Loader2, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { FloatingAIAssistant } from '../dashboard/floating-ai-assistant';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { profile, loading } = useAuth();
+  const { profile, loading, isSuperAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [mounted, setMounted] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [isAccessDenied, setIsAccessDenied] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Fail-safe: if loading takes too long, show an error or try to proceed
     const timer = setTimeout(() => {
-      if (loading) {
-        console.warn("Auth loading taking too long, check connection");
-        setShowError(true);
-      }
+      if (loading) setShowError(true);
     }, 8000);
     return () => clearTimeout(timer);
   }, [loading]);
@@ -32,8 +31,32 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     if (mounted && !loading && !profile) {
       navigate({ to: '/' });
+      return;
     }
-  }, [mounted, loading, profile, navigate]);
+
+    if (mounted && !loading && profile && !isSuperAdmin) {
+      const path = location.pathname;
+      const role = profile.role;
+
+      // Strict RBAC enforcement
+      const restrictions: Record<string, string[]> = {
+        'dg': ['/dashboard/staff', '/dashboard/payroll', '/dashboard/settings'],
+        'ta': ['/dashboard/staff', '/dashboard/payroll', '/dashboard/settings'],
+        'accounts': ['/dashboard/staff', '/dashboard/settings'],
+        'admin': ['/dashboard/settings/branding', '/dashboard/settings/roles'],
+        'staff': ['/dashboard/staff', '/dashboard/payroll', '/dashboard/settings'],
+        'adhoc': ['/dashboard/staff', '/dashboard/payroll', '/dashboard/settings'],
+      };
+
+      const restrictedPaths = restrictions[role] || [];
+      const isRestricted = restrictedPaths.some(p => path.startsWith(p));
+
+      if (isRestricted) {
+        setIsAccessDenied(true);
+        toast.error("Invalid User Role Selected. Please ensure you selected the proper role for this login.");
+      }
+    }
+  }, [mounted, loading, profile, navigate, location.pathname, isSuperAdmin]);
 
   if (!mounted || (loading && !showError)) {
     return (
@@ -41,6 +64,32 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Loading portal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAccessDenied) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background p-6">
+        <div className="flex flex-col items-center gap-6 max-w-md text-center">
+          <div className="h-20 w-20 rounded-full bg-destructive/10 flex items-center justify-center">
+            <ShieldAlert className="h-10 w-10 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight">Access Denied</h2>
+            <p className="text-muted-foreground">
+              Invalid User Role Selected. Please ensure you selected the proper role for this login.
+            </p>
+          </div>
+          <div className="flex flex-col w-full gap-2">
+            <Button onClick={() => navigate({ to: '/dashboard' })} variant="default">
+              Return to My Dashboard
+            </Button>
+            <Button onClick={() => window.location.href = '/'} variant="outline">
+              Sign Out & Re-login
+            </Button>
+          </div>
         </div>
       </div>
     );

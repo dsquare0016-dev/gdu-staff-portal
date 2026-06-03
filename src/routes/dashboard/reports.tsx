@@ -81,10 +81,49 @@ const monthlyNewStaff = [
   { name: 'May', value: 4 },
 ];
 
+import { exportToPDF, exportToExcel, exportToCSV } from '@/lib/utils/export';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+
 function ReportsPage() {
   const { canAccess } = useAuth();
+  const queryClient = useQueryClient();
   const [dateRange, setDateRange] = useState('this-month');
   const [department, setDepartment] = useState('all');
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async (format: 'pdf' | 'excel' | 'csv') => {
+    setIsExporting(true);
+    try {
+      const data = [
+        ...attendanceTrend.map(t => ({ Category: 'Attendance', Label: t.name, Value: t.present })),
+        ...staffByDepartment.map(d => ({ Category: 'Staff', Label: d.name, Value: d.value })),
+        ...payrollTrend.map(p => ({ Category: 'Payroll', Label: p.name, Value: p.value })),
+      ];
+
+      const filename = `GDU_Report_${new Date().toISOString().split('T')[0]}`;
+      const title = "GDU PORTAL - CONSOLIDATED WORKFORCE REPORT";
+      const headers = ["Category", "Label", "Value"];
+
+      if (format === 'pdf') {
+        exportToPDF({ data, filename, title, headers });
+      } else if (format === 'excel') {
+        exportToExcel({ data, filename });
+      } else {
+        exportToCSV({ data, filename });
+      }
+      toast.success(`Report exported as ${format.toUpperCase()}`);
+    } catch (err: any) {
+      toast.error("Export failed: " + err.message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries();
+    toast.success("Reports data refreshed");
+  };
 
   const canViewReports = canAccess('reports', 'view');
 
@@ -121,28 +160,34 @@ function ReportsPage() {
                 <SelectItem value="this-year">This Year</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={department} onValueChange={setDepartment}>
-              <SelectTrigger className="w-[180px]">
-                <Filter className="mr-2 h-4 w-4" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                <SelectItem value="administration">Administration</SelectItem>
-                <SelectItem value="finance">Finance</SelectItem>
-                <SelectItem value="operations">Operations</SelectItem>
-                <SelectItem value="ict">ICT</SelectItem>
-                <SelectItem value="hr">HR</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline">
+            
+            <Button variant="outline" onClick={handleRefresh}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button>
-              <Download className="mr-2 h-4 w-4" />
-              Export Report
-            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button disabled={isExporting}>
+                  {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Export Report
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl w-48">
+                <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-2 cursor-pointer">
+                  <FileText className="h-4 w-4 text-red-600" />
+                  Export as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2 cursor-pointer">
+                  <BarChart3 className="h-4 w-4 text-green-600" />
+                  Export as Excel
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-2 cursor-pointer">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                  Export as CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

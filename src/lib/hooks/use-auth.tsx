@@ -15,8 +15,9 @@ interface AuthContextType {
   isAccounts: boolean;
   isDirector: boolean;
   isStaff: boolean;
+  isAdhoc: boolean;
   hasRole: (roles: UserRole[]) => boolean;
-  canAccess: (module: string, action: string) => boolean;
+  canAccess: (module: string, action?: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,6 +114,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!authError && authData.user) {
       // Successfully logged in via database
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (selectedRole && profileData && profileData.role !== selectedRole) {
+        await supabase.auth.signOut();
+        return { 
+          error: { 
+            message: "Invalid User Role Selected. Please ensure you selected the proper role for this login." 
+          } 
+        };
+      }
+
       await fetchProfile(authData.user.id);
       return { error: null };
     }
@@ -131,6 +147,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isDemoPassword) {
       let role: UserRole = selectedRole || 'staff';
+      
+      // Strict role validation for demo credentials
+      if (selectedRole) {
+        if (password === 'admin123' && selectedRole !== 'admin') {
+           return { error: { message: "Invalid User Role Selected. Please ensure you selected the proper role for this login." } };
+        }
+        if (password === 'accounts123' && selectedRole !== 'accounts') {
+           return { error: { message: "Invalid User Role Selected. Please ensure you selected the proper role for this login." } };
+        }
+        if (password === 'dg123' && selectedRole !== 'dg') {
+           return { error: { message: "Invalid User Role Selected. Please ensure you selected the proper role for this login." } };
+        }
+        if (password === 'superadmin123' && selectedRole !== 'super_admin') {
+           return { error: { message: "Invalid User Role Selected. Please ensure you selected the proper role for this login." } };
+        }
+      }
+
       let name = 'User (Demo)';
 
       // If no role selected, try to infer from email
@@ -181,9 +214,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
-    sessionStorage.removeItem('gdu_demo_profile');
+    try {
+      await supabase.auth.signOut();
+      setProfile(null);
+      setUser(null);
+      setSession(null);
+      
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('gdu_demo_profile');
+        localStorage.removeItem('supabase.auth.token'); // Clear standard supabase token just in case
+        
+        // Clear theme if necessary, though the prompt says persist theme
+        // window.localStorage.removeItem('theme'); 
+      }
+      
+      toast.success("Logged out successfully");
+    } catch (error: any) {
+      console.error("Logout error:", error);
+    }
   };
 
   const isSuperAdmin = profile?.role === 'super_admin';
@@ -191,7 +239,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = profile?.role === 'admin' || isSuperAdmin;
   const isAccounts = profile?.role === 'accounts' || isSuperAdmin;
   const isDirector = profile?.role === 'dg' || profile?.role === 'ta' || isSuperAdmin;
-  const isStaff = profile?.role === 'staff';
+  const isStaff = profile?.role === 'staff' || profile?.role === 'adhoc';
+  const isAdhoc = profile?.role === 'adhoc';
 
   const hasRole = (roles: UserRole[]) => {
     if (!profile) return false;
@@ -281,6 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAccounts,
         isDirector,
         isStaff,
+        isAdhoc,
         hasRole,
         canAccess,
       }}

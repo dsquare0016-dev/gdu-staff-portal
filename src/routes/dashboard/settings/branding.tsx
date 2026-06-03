@@ -31,11 +31,23 @@ function BrandingSettings() {
     );
   }
 
-  const { data: branding, isLoading } = useQuery({
+  const { data: branding, isLoading: brandingLoading } = useQuery({
     queryKey: ['branding-settings'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('branding_settings')
+        .select('*')
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: loginSettings, isLoading: loginLoading } = useQuery({
+    queryKey: ['login-page-settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('login_page_settings')
         .select('*')
         .single();
       if (error) throw error;
@@ -56,6 +68,12 @@ function BrandingSettings() {
     logo_url_3: '',
   });
 
+  const [loginFormData, setLoginFormData] = useState({
+    title: '',
+    subtitle: '',
+    login_bg_url: '',
+  });
+
   useEffect(() => {
     if (branding) {
       setFormData({
@@ -73,6 +91,16 @@ function BrandingSettings() {
     }
   }, [branding]);
 
+  useEffect(() => {
+    if (loginSettings) {
+      setLoginFormData({
+        title: loginSettings.title || '',
+        subtitle: loginSettings.subtitle || '',
+        login_bg_url: loginSettings.login_bg_url || '',
+      });
+    }
+  }, [loginSettings]);
+
   const updateBrandingMutation = useMutation({
     mutationFn: async (updates: any) => {
       const { error } = await supabase
@@ -83,27 +111,39 @@ function BrandingSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branding-settings'] });
-      toast.success('Branding settings updated successfully');
-    },
-    onError: (error) => {
-      toast.error('Failed to update branding: ' + error.message);
+      toast.success('Branding settings updated');
     },
   });
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string, fieldName: string = 'logo_url') => {
+  const updateLoginMutation = useMutation({
+    mutationFn: async (updates: any) => {
+      const { error } = await supabase
+        .from('login_page_settings')
+        .update(updates)
+        .eq('id', loginSettings?.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['login-page-settings'] });
+      toast.success('Login page settings updated');
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: string, table: 'branding' | 'login', fieldName: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       setIsSubmitting(true);
-      
-      // Upload to Cloudinary
       const res = await uploadToCloudinary(file, 'branding');
 
-      // Update database
-      await updateBrandingMutation.mutateAsync({ [fieldName]: res.secure_url });
+      if (table === 'branding') {
+        await updateBrandingMutation.mutateAsync({ [fieldName]: res.secure_url });
+      } else {
+        await updateLoginMutation.mutateAsync({ [fieldName]: res.secure_url });
+      }
       
-      toast.success(`${type} uploaded and updated successfully`);
+      toast.success(`${type} updated successfully`);
     } catch (error: any) {
       toast.error(`Error uploading ${type}: ${error.message}`);
     } finally {
@@ -114,15 +154,15 @@ function BrandingSettings() {
   const handleSave = async () => {
     setIsSubmitting(true);
     try {
-      // Remove URLs from formData to avoid overwriting with old ones if upload just happened
       const { logo_url, logo_url_2, logo_url_3, ...rest } = formData;
       await updateBrandingMutation.mutateAsync(rest);
+      await updateLoginMutation.mutateAsync(loginFormData);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isLoading) {
+  if (brandingLoading || loginLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -131,198 +171,180 @@ function BrandingSettings() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="border backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle>Organization Logos</CardTitle>
-          <CardDescription>Manage the three seals displayed on the login page</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
-            {/* Logo 1 (Nigerian Coat of Arms) */}
-            <div className="space-y-4">
-              <Label className="flex items-center gap-2">
-                Nigerian Coat of Arms
-                <Badge variant="secondary" className="text-[10px] h-4">Seal 1</Badge>
-              </Label>
-              <div className="flex flex-col gap-3">
-                <div className="h-32 w-full rounded-lg border bg-white flex items-center justify-center p-4 overflow-hidden">
-                  <img src={branding?.logo_url || "/logo.png"} alt="Nigerian Coat of Arms" className="h-full w-full object-contain" />
-                </div>
-                <Label 
-                  htmlFor="logo-upload-1" 
-                  className="border-2 border-dashed rounded-lg p-2 text-center hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center gap-1"
-                >
-                  <Upload className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground">Change Coat of Arms</p>
-                  <input 
-                    id="logo-upload-1" 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    disabled={isSubmitting}
-                    onChange={(e) => handleFileUpload(e, 'Coat of Arms', 'logo_url')} 
-                  />
-                </Label>
-              </div>
-            </div>
-
-            {/* Logo 2 (Kogi State Logo) */}
-            <div className="space-y-4">
-              <Label className="flex items-center gap-2">
-                Kogi State Logo
-                <Badge variant="secondary" className="text-[10px] h-4">Seal 2</Badge>
-              </Label>
-              <div className="flex flex-col gap-3">
-                <div className="h-32 w-full rounded-lg border bg-white flex items-center justify-center p-4 overflow-hidden">
-                  <img src={(branding as any)?.logo_url_2 || "/logo.png"} alt="Kogi State Logo" className="h-full w-full object-contain" />
-                </div>
-                <Label 
-                  htmlFor="logo-upload-2" 
-                  className="border-2 border-dashed rounded-lg p-2 text-center hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center gap-1"
-                >
-                  <Upload className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground">Change Kogi State Logo</p>
-                  <input 
-                    id="logo-upload-2" 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    disabled={isSubmitting}
-                    onChange={(e) => handleFileUpload(e, 'Kogi Logo', 'logo_url_2')} 
-                  />
-                </Label>
-              </div>
-            </div>
-
-            {/* Logo 3 (GDU Logo) */}
-            <div className="space-y-4">
-              <Label className="flex items-center gap-2">
-                Current GDU Logo
-                <Badge variant="secondary" className="text-[10px] h-4">Seal 3</Badge>
-              </Label>
-              <div className="flex flex-col gap-3">
-                <div className="h-32 w-full rounded-lg border bg-white flex items-center justify-center p-4 overflow-hidden">
-                  <img src={(branding as any)?.logo_url_3 || "/logo.png"} alt="GDU Logo" className="h-full w-full object-contain" />
-                </div>
-                <Label 
-                  htmlFor="logo-upload-3" 
-                  className="border-2 border-dashed rounded-lg p-2 text-center hover:border-primary/50 transition-colors cursor-pointer flex flex-col items-center gap-1"
-                >
-                  <Upload className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-[10px] text-muted-foreground">Change GDU Logo</p>
-                  <input 
-                    id="logo-upload-3" 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    disabled={isSubmitting}
-                    onChange={(e) => handleFileUpload(e, 'GDU Logo', 'logo_url_3')} 
-                  />
-                </Label>
-              </div>
-            </div>
-          </div>
-          
-          <div className="pt-4 border-t">
-            <Label>Portal Name</Label>
-            <Input 
-              value={formData.portal_name}
-              onChange={(e) => setFormData({ ...formData, portal_name: e.target.value })}
-              placeholder="GDU Staff Portal"
-              className="mt-2"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle>Color Scheme</CardTitle>
-          <CardDescription>Customize portal colors</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Primary Color</Label>
-              <div className="flex gap-2">
-                <Input 
-                  type="color" 
-                  value={formData.primary_color.startsWith('#') ? formData.primary_color : '#1a365d'} 
-                  className="w-12 h-10 p-1" 
-                  onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })}
-                />
-                <Input 
-                  value={formData.primary_color} 
-                  className="flex-1" 
-                  onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Secondary Color</Label>
-              <div className="flex gap-2">
-                <Input 
-                  type="color" 
-                  value={formData.secondary_color.startsWith('#') ? formData.secondary_color : '#c9a227'} 
-                  className="w-12 h-10 p-1" 
-                  onChange={(e) => setFormData({ ...formData, secondary_color: e.target.value })}
-                />
-                <Input 
-                  value={formData.secondary_color} 
-                  className="flex-1" 
-                  onChange={(e) => setFormData({ ...formData, secondary_color: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border backdrop-blur-sm">
-        <CardHeader>
-          <CardTitle>Hero Section Content</CardTitle>
-          <CardDescription>Customize the login page hero text</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label>Hero Title</Label>
-              <Input 
-                value={formData.hero_title}
-                onChange={(e) => setFormData({ ...formData, hero_title: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Hero Subtitle</Label>
-              <Input 
-                value={formData.hero_subtitle}
-                onChange={(e) => setFormData({ ...formData, hero_subtitle: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Hero Tagline</Label>
-              <Input 
-                value={formData.hero_tagline}
-                onChange={(e) => setFormData({ ...formData, hero_tagline: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Footer Text</Label>
-              <Input 
-                value={formData.footer_text}
-                onChange={(e) => setFormData({ ...formData, footer_text: e.target.value })}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end">
-        <Button size="lg" onClick={handleSave} disabled={isSubmitting}>
-          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          Save Changes
+    <div className="space-y-6 pb-12">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Branding Settings</h2>
+          <p className="text-muted-foreground">Manage logos, colors, and login page appearance.</p>
+        </div>
+        <Button onClick={handleSave} disabled={isSubmitting} className="gap-2">
+          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Save All Changes
         </Button>
+      </div>
+
+      <div className="grid gap-6">
+        <Card className="border backdrop-blur-sm overflow-hidden">
+          <CardHeader className="bg-primary/5 border-b">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <div className="p-1.5 bg-primary/10 rounded-md">
+                <Upload className="h-4 w-4 text-primary" />
+              </div>
+              Organization Logos
+            </CardTitle>
+            <CardDescription>Official seals used across the platform and login page</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid gap-8 md:grid-cols-3">
+              {[
+                { label: 'Nigerian Coat of Arms', field: 'logo_url', url: branding?.logo_url, badge: 'Seal 1' },
+                { label: 'Kogi State Logo', field: 'logo_url_2', url: (branding as any)?.logo_url_2, badge: 'Seal 2' },
+                { label: 'GDU Logo', field: 'logo_url_3', url: (branding as any)?.logo_url_3, badge: 'Seal 3' },
+              ].map((logo, idx) => (
+                <div key={logo.field} className="space-y-4">
+                  <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {logo.label}
+                    <Badge variant="secondary" className="text-[9px] h-3.5 px-1.5">{logo.badge}</Badge>
+                  </Label>
+                  <div className="flex flex-col gap-4">
+                    <div className="aspect-square w-full max-w-[160px] mx-auto rounded-full border-4 border-muted bg-white flex items-center justify-center p-6 shadow-inner group relative overflow-hidden">
+                      <img 
+                        src={logo.url || "/logo.png"} 
+                        alt={logo.label} 
+                        className="max-h-full max-w-full object-contain transition-transform group-hover:scale-110 duration-500" 
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Label 
+                          htmlFor={`logo-upload-${idx}`} 
+                          className="text-white text-[10px] font-bold cursor-pointer flex items-center gap-1.5 bg-primary/80 px-3 py-1.5 rounded-full hover:bg-primary transition-colors"
+                        >
+                          <Upload className="h-3 w-3" />
+                          Change
+                        </Label>
+                      </div>
+                    </div>
+                    <input 
+                      id={`logo-upload-${idx}`} 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => handleFileUpload(e, logo.label, 'branding', logo.field)} 
+                    />
+                    <p className="text-[10px] text-center text-muted-foreground">Recommended: Transparent PNG, 512x512px</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <Card className="border">
+            <CardHeader>
+              <CardTitle className="text-lg">Login Page Management</CardTitle>
+              <CardDescription>Customize the entrance to your portal</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Login Title</Label>
+                <Input 
+                  value={loginFormData.title} 
+                  onChange={(e) => setLoginFormData({ ...loginFormData, title: e.target.value })} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Login Subtitle</Label>
+                <Input 
+                  value={loginFormData.subtitle} 
+                  onChange={(e) => setLoginFormData({ ...loginFormData, subtitle: e.target.value })} 
+                />
+              </div>
+              <div className="space-y-4 pt-2">
+                <Label>Background Image</Label>
+                <div className="relative aspect-video w-full rounded-lg border bg-muted overflow-hidden group">
+                  {loginFormData.login_bg_url ? (
+                    <img src={loginFormData.login_bg_url} alt="Login Background" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <p className="text-xs text-muted-foreground">No background image set</p>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Label 
+                      htmlFor="login-bg-upload" 
+                      className="text-white text-xs font-bold cursor-pointer flex items-center gap-2 bg-primary/80 px-4 py-2 rounded-full"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload New Background
+                    </Label>
+                  </div>
+                  <input 
+                    id="login-bg-upload" 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => handleFileUpload(e, 'Login Background', 'login', 'login_bg_url')} 
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border">
+            <CardHeader>
+              <CardTitle className="text-lg">Platform Branding</CardTitle>
+              <CardDescription>Colors and identity settings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Portal Name</Label>
+                <Input 
+                  value={formData.portal_name} 
+                  onChange={(e) => setFormData({ ...formData, portal_name: e.target.value })} 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Primary Color</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="color" 
+                      className="w-12 p-1 h-10" 
+                      value={formData.primary_color} 
+                      onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })} 
+                    />
+                    <Input 
+                      value={formData.primary_color} 
+                      onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })} 
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Secondary Color</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="color" 
+                      className="w-12 p-1 h-10" 
+                      value={formData.secondary_color} 
+                      onChange={(e) => setFormData({ ...formData, secondary_color: e.target.value })} 
+                    />
+                    <Input 
+                      value={formData.secondary_color} 
+                      onChange={(e) => setFormData({ ...formData, secondary_color: e.target.value })} 
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Footer Copyright Text</Label>
+                <Input 
+                  value={formData.footer_text} 
+                  onChange={(e) => setFormData({ ...formData, footer_text: e.target.value })} 
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

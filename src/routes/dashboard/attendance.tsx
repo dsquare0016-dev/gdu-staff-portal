@@ -66,7 +66,11 @@ import {
   ShieldCheck,
   ShieldAlert,
   Loader2,
+  QrCode,
+  Scan,
 } from 'lucide-react';
+import { QRScanner } from '@/components/attendance/qr-scanner';
+import { QRGenerator } from '@/components/attendance/qr-generator';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -82,14 +86,18 @@ export const Route = createFileRoute('/dashboard/attendance')({
 const statuses = ['All Status', 'present', 'absent', 'late', 'leave', 'holiday'];
 
 function AttendancePage() {
-  const { profile, canAccess } = useAuth();
+  const { profile, canAccess, isSuperAdmin, isAdmin, isICT } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isQRCodeOpen, setIsQRCodeOpen] = useState(false);
   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+
+  const canScan = isSuperAdmin || isAdmin || isICT;
 
   // Fetch departments from database
   const { data: dbDepartments = [] } = useQuery({
@@ -277,51 +285,65 @@ function AttendancePage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Attendance Management</h1>
-            <p className="text-muted-foreground mt-1">
-              Track and manage staff attendance records
+            <h2 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight flex items-center gap-2">
+              <ClipboardList className="h-6 w-6 text-primary" />
+              Attendance Management
+            </h2>
+            <p className="text-sm text-muted-foreground font-medium">
+              Track daily presence and punctuality.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium',
-                isOnline
-                  ? 'bg-green-500/10 text-green-600'
-                  : 'bg-red-500/10 text-red-600'
-              )}
-            >
-              {isOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-              {isOnline ? 'Online' : 'Offline'}
-            </div>
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Export Report
-            </Button>
-            {canInitiateAttendance && (
-              <Dialog open={isCheckInOpen} onOpenChange={setIsCheckInOpen}>
+          
+          <div className="flex gap-2">
+            <Dialog open={isQRCodeOpen} onOpenChange={setIsQRCodeOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2 rounded-xl">
+                  <QrCode className="h-4 w-4" />
+                  My QR Code
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xs rounded-2xl">
+                <DialogHeader>
+                  <DialogTitle>My ID Barcode</DialogTitle>
+                  <DialogDescription>Show this to the scanner for attendance.</DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-center py-6">
+                  <QRGenerator 
+                    staffId={profile?.readable_id || 'GDU-PENDING'} 
+                    name={profile?.full_name || ''} 
+                    department={profile?.department?.name || 'General'} 
+                    role={profile?.role || 'staff'}
+                    size={200}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {canScan && (
+              <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
                 <DialogTrigger asChild>
-                  <Button>
-                    <LogIn className="mr-2 h-4 w-4" />
-                    Record Attendance
+                  <Button className="gap-2 rounded-xl shadow-lg shadow-primary/20">
+                    <Scan className="h-4 w-4" />
+                    Scan Attendance
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-md rounded-2xl">
                   <DialogHeader>
-                    <DialogTitle>Record Attendance</DialogTitle>
-                    <DialogDescription>
-                      Mark attendance for {format(date || new Date(), 'PPP')}
-                    </DialogDescription>
+                    <DialogTitle>Attendance Scanner</DialogTitle>
+                    <DialogDescription>Scan a staff member's barcode to record attendance.</DialogDescription>
                   </DialogHeader>
-                  <AttendanceForm onSuccess={() => {
-                    setIsCheckInOpen(false);
-                    queryClient.invalidateQueries({ queryKey: ['attendance'] });
-                  }} />
+                  <div className="py-4">
+                    <QRScanner />
+                  </div>
                 </DialogContent>
               </Dialog>
             )}
+            <Button variant="outline" className="rounded-xl">
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
           </div>
         </div>
 

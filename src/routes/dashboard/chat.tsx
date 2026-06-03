@@ -32,9 +32,28 @@ import {
   Loader2,
   FileIcon,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute('/dashboard/chat')({
   head: () => ({
@@ -66,17 +85,29 @@ interface Message {
 }
 
 function ChatPage() {
-  const { profile } = useAuth();
+  const { profile, isSuperAdmin, isAdmin, isICT } = useAuth();
   const queryClient = useQueryClient();
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
-  const [message, setMessage] = useState('');
   const [chatType, setChatType] = useState<'chats' | 'groups' | 'announcements'>('chats');
+  const [newMessage, setNewMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [attachment, setAttachment] = useState<{ url: string; type: string; name: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [replyTo, setReplyTo] = useState<any | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
+  // Dialog states
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [isAnnouncementDialogOpen, setIsAnnouncementDialogOpen] = useState(false);
+  
+  const [groupName, setGroupName] = useState('');
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertContent, setAlertContent] = useState('');
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementContent, setAnnouncementContent] = useState('');
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch users for direct chats
   const { data: users = [] } = useQuery({
     queryKey: ['chat-users'],
     queryFn: async () => {
@@ -84,123 +115,178 @@ function ChatPage() {
         .from('staff_records')
         .select('*')
         .neq('id', profile?.id)
-        .eq('status', 'active')
-        .order('full_name');
+        .eq('status', 'active');
       if (error) throw error;
-      return data as ChatUser[];
+      return data;
     },
-    enabled: !!profile?.id,
   });
 
-  // Fetch announcements
+  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['messages', selectedChat, chatType],
+    enabled: !!selectedChat,
+    queryFn: async () => {
+      let query = supabase
+        .from('messages')
+        .select('*, profiles:sender_id(full_name, avatar_url)')
+        .order('created_at', { ascending: true });
+
+      if (chatType === 'chats') {
+        query = query.or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${selectedChat}),and(sender_id.eq.${selectedChat},recipient_id.eq.${profile?.id})`);
+      } else {
+        query = query.eq('group_id', selectedChat);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      // Mark as read
+      if (data.length > 0) {
+        const unread = data.filter(m => !m.is_read && m.recipient_id === profile?.id);
+        if (unread.length > 0) {
+          await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .in('id', unread.map(m => m.id));
+        }
+      }
+      
+      return data;
+    },
+  });
+
   const { data: announcements = [] } = useQuery({
     queryKey: ['announcements'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('announcements')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { descending: true });
       if (error) throw error;
       return data;
     },
   });
 
-  // Fetch messages for selected chat
-  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
-    queryKey: ['messages', selectedChat],
+  const { data: groups = [] } = useQuery({
+    queryKey: ['chat-groups'],
     queryFn: async () => {
-      if (!selectedChat) return [];
-      
       const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .or(`and(sender_id.eq.${profile?.id},receiver_id.eq.${selectedChat}),and(sender_id.eq.${selectedChat},receiver_id.eq.${profile?.id})`)
-        .order('created_at', { ascending: true });
-      
+        .from('chat_groups')
+        .select('*');
       if (error) throw error;
-      return data as Message[];
+      return data;
     },
-    enabled: !!selectedChat && chatType === 'chats',
   });
 
-  // Real-time subscription
   useEffect(() => {
-    if (!profile?.id) return;
-
-    const channel = supabase
-      .channel('public:messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `receiver_id=eq.${profile.id}`,
-        },
-        (payload) => {
-          queryClient.invalidateQueries({ queryKey: ['messages'] });
-          toast.info('New message received');
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [profile?.id, queryClient]);
-
-  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, [messages]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, selectedChat]);
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() && !attachment) return;
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedChat || (!message.trim() && !attachment)) return;
-
-      const newMessage = {
-        sender_id: profile?.id,
-        receiver_id: chatType === 'chats' ? selectedChat : null,
-        group_id: chatType === 'groups' ? selectedChat : null,
-        content: message.trim(),
-        attachment_url: attachment?.url,
-        attachment_type: attachment?.type,
-      };
-
-      const { error } = await supabase.from('messages').insert([newMessage]);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setMessage('');
-      setAttachment(null);
-      queryClient.invalidateQueries({ queryKey: ['messages', selectedChat] });
-    },
-    onError: (error) => {
-      toast.error('Failed to send message: ' + error.message);
-    },
-  });
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
     try {
-      const res = await uploadToCloudinary(file, 'chat_attachments');
-      setAttachment({
-        url: res.secure_url,
-        type: res.resource_type,
-        name: file.name,
-      });
-      toast.success('File uploaded successfully');
+      let attachmentUrl = null;
+      let attachmentType = null;
+
+      if (attachment) {
+        setIsUploading(true);
+        const res = await uploadToCloudinary(attachment, 'chat');
+        attachmentUrl = res.secure_url;
+        attachmentType = attachment.type.startsWith('image/') ? 'image' : 'file';
+      }
+
+      const { error } = await supabase
+        .from('messages')
+        .insert([{
+          sender_id: profile?.id,
+          recipient_id: chatType === 'chats' ? selectedChat : null,
+          group_id: chatType !== 'chats' ? selectedChat : null,
+          content: newMessage,
+          attachment_url: attachmentUrl,
+          attachment_type: attachmentType,
+          reply_to_id: replyTo?.id,
+        }]);
+
+      if (error) throw error;
+      setNewMessage('');
+      setAttachment(null);
+      setReplyTo(null);
+      queryClient.invalidateQueries({ queryKey: ['messages', selectedChat] });
     } catch (error: any) {
-      toast.error('Upload failed: ' + error.message);
+      toast.error('Error sending message: ' + error.message);
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) return;
+    try {
+      const { error } = await supabase
+        .from('chat_groups')
+        .insert([{ 
+          name: groupName, 
+          created_by: profile?.id,
+          type: 'group'
+        }]);
+      if (error) throw error;
+      toast.success('Group created successfully');
+      setGroupName('');
+      setIsGroupDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['chat-groups'] });
+    } catch (error: any) {
+      toast.error('Error creating group: ' + error.message);
+    }
+  };
+
+  const handleCreateAlert = async () => {
+    if (!alertTitle.trim() || !alertContent.trim()) return;
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .insert([{ 
+          title: alertTitle, 
+          content: alertContent,
+          type: 'alert',
+          created_by: profile?.id
+        }]);
+      if (error) throw error;
+      toast.success('Alert sent successfully');
+      setAlertTitle('');
+      setAlertContent('');
+      setIsAlertDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    } catch (error: any) {
+      toast.error('Error sending alert: ' + error.message);
+    }
+  };
+
+  const handleCreateAnnouncement = async () => {
+    if (!announcementTitle.trim() || !announcementContent.trim()) return;
+    try {
+      const { error } = await supabase
+        .from('announcements')
+        .insert([{ 
+          title: announcementTitle, 
+          content: announcementContent,
+          type: 'announcement',
+          created_by: profile?.id,
+          is_pinned: true
+        }]);
+      if (error) throw error;
+      toast.success('Announcement published');
+      setAnnouncementTitle('');
+      setAnnouncementContent('');
+      setIsAnnouncementDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+    } catch (error: any) {
+      toast.error('Error publishing announcement: ' + error.message);
+    }
+  };
+
+  const startVoiceCall = () => {
+    toast.info("Voice calling feature coming soon in production. Currently simulating call with " + selectedUser?.full_name);
   };
 
   const getStatusColor = (status: string) => {
@@ -219,15 +305,103 @@ function ChatPage() {
                 <MessageSquare className="h-5 w-5 text-primary" />
                 Messages
               </CardTitle>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Plus className="h-4 w-4" />
-              </Button>
+              
+              {(isSuperAdmin || isAdmin || isICT) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                    <DropdownMenuItem onClick={() => setIsGroupDialogOpen(true)} className="gap-2 cursor-pointer">
+                      <Users className="h-4 w-4" />
+                      Create Group
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setIsAlertDialogOpen(true)} className="gap-2 cursor-pointer text-orange-600">
+                      <AlertCircle className="h-4 w-4" />
+                      Send Alert
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsAnnouncementDialogOpen(true)} className="gap-2 cursor-pointer text-blue-600">
+                      <Megaphone className="h-4 w-4" />
+                      Post Announcement
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search..." className="pl-10 h-9" />
             </div>
           </CardHeader>
+
+          {/* Dialogs */}
+          <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create New Group</DialogTitle>
+                <DialogDescription>Create a collaborative space for teams.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Group Name</Label>
+                  <Input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="e.g. Finance Team" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsGroupDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateGroup}>Create Group</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Send Emergency Alert</DialogTitle>
+                <DialogDescription>Send a critical alert to all staff members.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Alert Title</Label>
+                  <Input value={alertTitle} onChange={(e) => setAlertTitle(e.target.value)} placeholder="e.g. System Maintenance" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Content</Label>
+                  <Textarea value={alertContent} onChange={(e) => setAlertContent(e.target.value)} placeholder="Describe the alert..." />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAlertDialogOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleCreateAlert}>Send Alert</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAnnouncementDialogOpen} onOpenChange={setIsAnnouncementDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Post New Announcement</DialogTitle>
+                <DialogDescription>Broadcast information to the entire portal.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Announcement Title</Label>
+                  <Input value={announcementTitle} onChange={(e) => setAnnouncementTitle(e.target.value)} placeholder="e.g. Monthly Staff Meeting" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Content</Label>
+                  <Textarea value={announcementContent} onChange={(e) => setAnnouncementContent(e.target.value)} placeholder="Write announcement details..." />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAnnouncementDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleCreateAnnouncement}>Publish Announcement</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <div className="px-4 pb-2">
             <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
               <Button

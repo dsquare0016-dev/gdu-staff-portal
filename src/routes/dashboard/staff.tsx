@@ -65,10 +65,15 @@ import {
   Building2,
   Briefcase,
   Clock,
+  Shield,
+  CheckCircle,
   Loader2,
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
+
+import { generateNextStaffId } from '@/lib/utils/staff-id';
+import { sendWelcomeEmail } from '@/lib/utils/email-service';
 
 export const Route = createFileRoute('/dashboard/staff')({
   head: () => ({
@@ -77,7 +82,7 @@ export const Route = createFileRoute('/dashboard/staff')({
   component: StaffManagementPage,
 });
 
-const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'ta', 'ict', 'staff'];
+const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'ta', 'ict', 'staff', 'adhoc'];
 const statuses = ['All Status', 'active', 'inactive', 'suspended', 'retired'];
 
 function StaffManagementPage() {
@@ -684,6 +689,7 @@ function StaffForm({
     step: '1',
     employment_date: new Date().toISOString().split('T')[0],
     retirement_date: '',
+    adhoc_expiry: '',
     gender: 'male',
     date_of_birth: '',
     qualification: '',
@@ -694,7 +700,16 @@ function StaffForm({
     next_of_kin_phone: '',
     next_of_kin_rel: '',
     passport_url: '',
+    readable_id: '',
   });
+
+  useEffect(() => {
+    const fetchNextId = async () => {
+      const nextId = await generateNextStaffId();
+      setFormData(prev => ({ ...prev, readable_id: nextId }));
+    };
+    fetchNextId();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -708,12 +723,22 @@ function StaffForm({
           grade_level: parseInt(formData.grade_level),
           step: parseInt(formData.step),
           retirement_date: formData.retirement_date || null,
+          adhoc_expiry: formData.role === 'adhoc' ? formData.adhoc_expiry || null : null,
         }])
         .select();
 
       if (error) throw error;
 
-      toast.success('Staff member added successfully');
+      // Send Welcome Email
+      await sendWelcomeEmail({
+        fullName: formData.full_name,
+        staffId: formData.readable_id,
+        email: formData.email,
+        role: formData.role,
+        portalUrl: window.location.origin,
+      });
+
+      toast.success(`Staff member registered successfully with ID: ${formData.readable_id}`);
       onSuccess();
     } catch (error: any) {
       toast.error('Failed to add staff: ' + error.message);
@@ -745,10 +770,16 @@ function StaffForm({
     <form onSubmit={handleSubmit} className="space-y-6 py-4">
       <div className="max-h-[70vh] overflow-y-auto pr-4 space-y-8">
         <section className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Personal Information
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Personal Information
+            </h3>
+            <div className="flex items-center gap-2 bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
+              <span className="text-[10px] font-bold text-primary uppercase">Staff ID:</span>
+              <span className="text-xs font-mono font-bold text-primary">{formData.readable_id || 'Generating...'}</span>
+            </div>
+          </div>
           <div className="flex flex-col md:flex-row gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Passport Photograph</label>
@@ -883,6 +914,26 @@ function StaffForm({
             <div className="space-y-2">
               <label className="text-sm font-medium">Employment Date</label>
               <Input type="date" value={formData.employment_date} onChange={(e) => setFormData({ ...formData, employment_date: e.target.value })} />
+            </div>
+            {formData.role === 'adhoc' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-destructive font-bold uppercase tracking-tight">Adhoc Expiry Date</label>
+                <Input 
+                  required={formData.role === 'adhoc'}
+                  type="date" 
+                  value={formData.adhoc_expiry} 
+                  onChange={(e) => setFormData({ ...formData, adhoc_expiry: e.target.value })} 
+                  className="border-destructive/30 focus-visible:ring-destructive"
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Custom Staff ID (Optional)</label>
+              <Input 
+                value={formData.readable_id} 
+                onChange={(e) => setFormData({ ...formData, readable_id: e.target.value })} 
+                placeholder="e.g. GDU100"
+              />
             </div>
           </div>
         </section>
