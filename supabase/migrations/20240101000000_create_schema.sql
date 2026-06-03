@@ -444,6 +444,8 @@ CREATE TABLE IF NOT EXISTS public.branding_settings (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   portal_name         TEXT NOT NULL DEFAULT 'GDU Staff Portal',
   logo_url            TEXT,
+  logo_url_2          TEXT,
+  logo_url_3          TEXT,
   login_bg_url        TEXT,
   primary_color       TEXT DEFAULT '#1a3a5c',
   secondary_color     TEXT DEFAULT '#d4a017',

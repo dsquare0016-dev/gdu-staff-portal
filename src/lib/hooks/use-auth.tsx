@@ -18,6 +18,7 @@ interface AuthContextType {
   isAdhoc: boolean;
   hasRole: (roles: UserRole[]) => boolean;
   canAccess: (module: string, action?: string) => boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -333,6 +334,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdhoc,
         hasRole,
         canAccess,
+        refreshProfile: async () => {
+          if (user) await fetchProfile(user.id);
+        },
       }}
     >
       {children}

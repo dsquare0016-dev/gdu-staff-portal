@@ -477,6 +477,7 @@ function DocumentsPage() {
 function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
   const [isUploading, setIsUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('other');
   const [staffName, setStaffName] = useState('');
@@ -486,6 +487,14 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
       if (!name) setName(selectedFile.name);
+
+      // Create preview for images
+      if (selectedFile.type.startsWith('image/')) {
+        const url = URL.createObjectURL(selectedFile);
+        setPreviewUrl(url);
+      } else {
+        setPreviewUrl(null);
+      }
     }
   };
 
@@ -527,7 +536,7 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
     <div className="grid gap-4 py-4">
       <div 
         className={cn(
-          "border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer relative",
+          "border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer relative overflow-hidden min-h-[160px] flex flex-col items-center justify-center",
           file ? "border-primary bg-primary/5" : "hover:border-primary/50"
         )}
         onClick={() => document.getElementById('file-input')?.click()}
@@ -538,13 +547,36 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
           className="hidden" 
           onChange={handleFileChange}
         />
-        <Upload className={cn("h-8 w-8 mx-auto mb-2", file ? "text-primary" : "text-muted-foreground")} />
-        <p className="text-sm font-medium">
-          {file ? file.name : "Click or drag to upload files"}
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "PDF, DOCX, XLSX, JPG, PNG (Max 10MB)"}
-        </p>
+        
+        {previewUrl ? (
+          <div className="absolute inset-0 w-full h-full">
+            <img src={previewUrl} alt="Preview" className="w-full h-full object-cover opacity-20" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/40">
+              <Image className="h-8 w-8 text-primary mb-2" />
+              <p className="text-sm font-medium text-foreground">{file?.name}</p>
+              <p className="text-xs text-muted-foreground">Click to change</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <Upload className={cn("h-8 w-8 mx-auto mb-2", file ? "text-primary" : "text-muted-foreground")} />
+            <p className="text-sm font-medium">
+              {file ? file.name : "Click or drag to upload files"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "PDF, DOCX, XLSX, JPG, PNG (Max 10MB)"}
+            </p>
+          </>
+        )}
+        
+        {isUploading && (
+          <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center z-10">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-xs font-bold text-primary animate-pulse">UPLOADING TO SERVER...</p>
+            </div>
+          </div>
+        )}
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium">Document Name</label>

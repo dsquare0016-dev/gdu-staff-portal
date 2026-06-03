@@ -6,18 +6,53 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { User, Mail, Phone, Lock, Bell, Shield, Save, Camera } from 'lucide-react';
+import { User, Mail, Phone, Lock, Bell, Shield, Save, Camera, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useState } from 'react';
+import { uploadToCloudinary } from '@/lib/cloudinary';
+import { supabase } from '@/integrations/supabase/client';
 
 export const Route = createFileRoute('/dashboard/settings/')({
   component: AccountSettings,
 });
 
 function AccountSettings() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleSave = () => {
     toast.success('Account settings updated successfully');
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+
+    try {
+      setIsUploading(true);
+      const res = await uploadToCloudinary(file, 'avatars');
+
+      // Update profile in database
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: res.secure_url })
+        .eq('id', profile.id);
+
+      if (error) throw error;
+
+      // Update staff record too
+      await supabase
+        .from('staff_records')
+        .update({ passport_url: res.secure_url })
+        .eq('user_id', profile.id);
+
+      toast.success('Profile picture updated successfully');
+      if (refreshProfile) refreshProfile();
+    } catch (error: any) {
+      toast.error('Upload failed: ' + error.message);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   if (!profile) return null;
@@ -32,27 +67,30 @@ function AccountSettings() {
         <CardContent className="space-y-6">
           <div className="flex items-center gap-6 pb-4">
             <div className="relative">
-              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20 overflow-hidden">
+              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center border-2 border-primary/20 overflow-hidden group">
                 {profile.avatar_url ? (
                   <img src={profile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
                 ) : (
                   <User className="h-10 w-10 text-primary/40" />
+                )}
+                {isUploading && (
+                  <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
                 )}
               </div>
               <Label 
                 htmlFor="avatar-upload" 
                 className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full shadow-md border border-background bg-secondary flex items-center justify-center cursor-pointer hover:bg-secondary/80 transition-colors"
               >
-                <Camera className="h-3.5 w-3.5" />
+                {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
                 <input 
                   id="avatar-upload" 
                   type="file" 
                   accept="image/*" 
                   className="hidden" 
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) toast.success(`Profile picture "${file.name}" uploaded successfully`);
-                  }}
+                  onChange={handleAvatarUpload}
+                  disabled={isUploading}
                 />
               </Label>
             </div>
@@ -60,10 +98,12 @@ function AccountSettings() {
               <p className="text-sm font-medium">Profile Picture</p>
               <p className="text-xs text-muted-foreground mt-1">PNG, JPG or GIF. Max 2MB.</p>
               <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="outline" asChild>
-                  <label htmlFor="avatar-upload" className="cursor-pointer">Upload</label>
+                <Button size="sm" variant="outline" asChild disabled={isUploading}>
+                  <label htmlFor="avatar-upload" className="cursor-pointer">
+                    {isUploading ? 'Uploading...' : 'Upload'}
+                  </label>
                 </Button>
-                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive">Remove</Button>
+                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={isUploading}>Remove</Button>
               </div>
             </div>
           </div>

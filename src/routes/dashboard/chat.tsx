@@ -92,7 +92,21 @@ function ChatPage() {
   const [newMessage, setNewMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<any | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAttachment(file);
+      if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        setAttachmentPreview(url);
+      } else {
+        setAttachmentPreview(null);
+      }
+    }
+  };
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   // Dialog states
@@ -211,6 +225,7 @@ function ChatPage() {
       if (error) throw error;
       setNewMessage('');
       setAttachment(null);
+      setAttachmentPreview(null);
       setReplyTo(null);
       queryClient.invalidateQueries({ queryKey: ['messages', selectedChat] });
     } catch (error: any) {
@@ -613,12 +628,27 @@ function ChatPage() {
 
               <div className="p-4 border-t space-y-2">
                 {attachment && (
-                  <div className="flex items-center justify-between p-2 bg-muted rounded-lg border">
-                    <div className="flex items-center gap-2">
-                      <FileIcon className="h-4 w-4 text-primary" />
+                  <div className="flex items-center justify-between p-2 bg-muted rounded-lg border relative overflow-hidden">
+                    {attachmentPreview && (
+                      <img src={attachmentPreview} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-10 pointer-events-none" />
+                    )}
+                    <div className="flex items-center gap-2 relative z-10">
+                      {attachmentPreview ? (
+                        <ImageIcon className="h-4 w-4 text-primary" />
+                      ) : (
+                        <FileIcon className="h-4 w-4 text-primary" />
+                      )}
                       <span className="text-xs font-medium truncate max-w-[200px]">{attachment.name}</span>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAttachment(null)}>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 relative z-10" 
+                      onClick={() => {
+                        setAttachment(null);
+                        setAttachmentPreview(null);
+                      }}
+                    >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>

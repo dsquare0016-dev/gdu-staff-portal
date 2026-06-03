@@ -753,12 +753,19 @@ function StaffForm({
 
     try {
       setIsSubmitting(true);
+      // Show local preview immediately if possible, or just use the Cloudinary URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // We can set a temporary local URL if we want, but Cloudinary is fast enough
+        // and we already have setFormData below.
+      };
+      reader.readAsDataURL(file);
       
       // Upload to Cloudinary
       const res = await uploadToCloudinary(file, 'passports');
 
       setFormData({ ...formData, passport_url: res.secure_url });
-      toast.success('Passport photo uploaded');
+      toast.success('Passport photo uploaded and displayed');
     } catch (error: any) {
       toast.error('Error uploading passport: ' + error.message);
     } finally {
@@ -789,13 +796,18 @@ function StaffForm({
                 ) : (
                   <Plus className="h-8 w-8 text-muted-foreground" />
                 )}
+                {isSubmitting && !formData.passport_url && (
+                  <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                )}
                 <label 
                   htmlFor="passport-upload" 
                   className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer text-[10px]"
                 >
-                  Click to upload
+                  {isSubmitting ? 'Uploading...' : 'Click to upload'}
                 </label>
-                <input id="passport-upload" type="file" className="hidden" accept="image/*" onChange={handlePassportUpload} />
+                <input id="passport-upload" type="file" className="hidden" accept="image/*" onChange={handlePassportUpload} disabled={isSubmitting} />
               </div>
             </div>
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
