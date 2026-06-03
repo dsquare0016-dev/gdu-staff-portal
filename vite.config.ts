@@ -8,8 +8,9 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
   tanstackStart: {
-    // Let TanStack Start use its default server entry for better route matching.
-    // Error handling is now moved to src/start.ts via errorMiddleware.
+    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
+    // nitro/vite builds from this
+    server: { entry: "server" },
   },
   nitro: {
     preset: "vercel",
