@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { toast } from 'sonner';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 import {
   MessageSquare,
   Send,
@@ -130,7 +130,10 @@ function ChatPage() {
         .select('*')
         .neq('id', profile?.id)
         .eq('status', 'active');
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch chat users');
+        return [];
+      }
       return data;
     },
   });
@@ -151,7 +154,10 @@ function ChatPage() {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch messages');
+        return [];
+      }
       
       // Mark as read
       if (data.length > 0) {
@@ -175,7 +181,10 @@ function ChatPage() {
         .from('announcements')
         .select('*')
         .order('created_at', { descending: true });
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch announcements');
+        return [];
+      }
       return data;
     },
   });
@@ -186,7 +195,10 @@ function ChatPage() {
       const { data, error } = await supabase
         .from('chat_groups')
         .select('*');
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch chat groups');
+        return [];
+      }
       return data;
     },
   });
@@ -228,7 +240,7 @@ function ChatPage() {
       setReplyTo(null);
       queryClient.invalidateQueries({ queryKey: ['messages', selectedChat] });
     } catch (error: any) {
-      toast.error('Error sending message: ' + error.message);
+      handleDatabaseError(error, 'send message');
     } finally {
       setIsUploading(false);
     }
@@ -245,12 +257,12 @@ function ChatPage() {
           type: 'group'
         }]);
       if (error) throw error;
-      toast.success('Group created successfully');
+      handlePortalNotification('Group created successfully', { severity: 'success' });
       setGroupName('');
       setIsGroupDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['chat-groups'] });
     } catch (error: any) {
-      toast.error('Error creating group: ' + error.message);
+      handleDatabaseError(error, 'create group');
     }
   };
 
@@ -266,13 +278,13 @@ function ChatPage() {
           created_by: profile?.id
         }]);
       if (error) throw error;
-      toast.success('Alert sent successfully');
+      handlePortalNotification('Alert sent successfully', { severity: 'success' });
       setAlertTitle('');
       setAlertContent('');
       setIsAlertDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['announcements'] });
     } catch (error: any) {
-      toast.error('Error sending alert: ' + error.message);
+      handleDatabaseError(error, 'send alert');
     }
   };
 
@@ -289,18 +301,18 @@ function ChatPage() {
           is_pinned: true
         }]);
       if (error) throw error;
-      toast.success('Announcement published');
+      handlePortalNotification('Announcement published', { severity: 'success' });
       setAnnouncementTitle('');
       setAnnouncementContent('');
       setIsAnnouncementDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['announcements'] });
     } catch (error: any) {
-      toast.error('Error publishing announcement: ' + error.message);
+      handleDatabaseError(error, 'publish announcement');
     }
   };
 
   const startVoiceCall = () => {
-    toast.info("Voice calling feature coming soon in production. Currently simulating call with " + selectedUser?.full_name);
+    handlePortalNotification("Voice calling feature coming soon in production. Currently simulating call with " + selectedUser?.full_name, { severity: 'info' });
   };
 
   const getStatusColor = (status: string) => {

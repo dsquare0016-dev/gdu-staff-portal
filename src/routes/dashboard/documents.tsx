@@ -66,7 +66,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
+import { format } from 'date-fns';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
 export const Route = createFileRoute('/dashboard/documents')({
@@ -76,95 +78,99 @@ export const Route = createFileRoute('/dashboard/documents')({
   component: DocumentsPage,
 });
 
-const mockDocuments = [
-  {
-    id: '1',
-    name: 'Appointment Letter - Adebayo Johnson',
-    type: 'pdf',
-    size: 245000,
-    category: 'Appointment',
-    staff_name: 'Adebayo Johnson',
-    uploaded_by: 'Chidi Okafor',
-    status: 'approved',
-    created_at: '2026-05-15',
-  },
-  {
-    id: '2',
-    name: 'Nysc Certificate',
-    type: 'pdf',
-    size: 180000,
-    category: 'Credentials',
-    staff_name: 'Grace Okonkwo',
-    uploaded_by: 'Grace Okonkwo',
-    status: 'approved',
-    created_at: '2026-05-10',
-  },
-  {
-    id: '3',
-    name: 'Staff Photo',
-    type: 'jpg',
-    size: 85000,
-    category: 'Personal',
-    staff_name: 'Emmanuel Obi',
-    uploaded_by: 'Emmanuel Obi',
-    status: 'approved',
-    created_at: '2026-05-08',
-  },
-  {
-    id: '4',
-    name: 'First Degree Certificate',
-    type: 'pdf',
-    size: 320000,
-    category: 'Credentials',
-    staff_name: 'Fatima Bello',
-    uploaded_by: 'Fatima Bello',
-    status: 'pending',
-    created_at: '2026-05-25',
-  },
-  {
-    id: '5',
-    name: 'Payroll Record - May 2026',
-    type: 'xlsx',
-    size: 125000,
-    category: 'Payroll',
-    staff_name: 'Multiple',
-    uploaded_by: 'Grace Okonkwo',
-    status: 'approved',
-    created_at: '2026-05-26',
-  },
-  {
-    id: '6',
-    name: 'Leave Application',
-    type: 'pdf',
-    size: 95000,
-    category: 'Leave',
-    staff_name: 'Amina Ibrahim',
-    uploaded_by: 'Amina Ibrahim',
-    status: 'pending',
-    created_at: '2026-05-27',
-  },
-];
-
-const categories = ['All Categories', 'Appointment', 'Credentials', 'Personal', 'Payroll', 'Leave', 'Other'];
 const fileTypes = ['All Types', 'pdf', 'docx', 'xlsx', 'jpg', 'png'];
 const statuses = ['All Status', 'approved', 'pending', 'rejected'];
 
 function DocumentsPage() {
-  const { canAccess } = useAuth();
+  const { canAccess, profile, isSuperAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
+  // Fetch documents from database
+  const { data: documents = [], isLoading } = useQuery({
+    queryKey: ['documents'],
+    queryFn: async () => {
+      let query = supabase
+        .from('documents')
+        .select(`
+          *,
+          staff:staff_records(full_name),
+          category:document_categories(name)
+        `)
+        .order('created_at', { descending: true });
+
+      // Non-privileged users only see their own docs
+      if (!isSuperAdmin && !canAccess('documents', 'view_all')) {
+        query = query.eq('staff_id', profile?.staff_id);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        handleDatabaseError(error, 'fetch documents');
+        return [];
+      }
+      return data;
+    },
+    enabled: !!profile,
+  });
+
+  // Fetch categories
+  const { data: dbCategories = [] } = useQuery({
+    queryKey: ['document-categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('document_categories').select('name');
+      if (error) return [];
+      return data.map(c => c.name);
+    }
+  });
+
+  const categories = ['All Categories', ...dbCategories];
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('documents').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      handlePortalNotification('Document deleted successfully', { severity: 'success' });
+    },
+    onError: (error: any) => handleDatabaseError(error, 'delete document')
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string, status: string }) => {
+      const { error } = await supabase
+        .from('documents')
+        .update({ status, reviewed_by: profile?.id, reviewed_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      handlePortalNotification('Document status updated', { severity: 'success' });
+    },
+    onError: (error: any) => handleDatabaseError(error, 'update document status')
+  });
+
   const canManageDocuments = canAccess('documents', 'create') || canAccess('documents', 'edit');
 
-  const filteredDocuments = mockDocuments.filter((doc) => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.staff_name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === 'All Categories' || doc.category === categoryFilter;
-    const matchesType = typeFilter === 'All Types' || doc.type === typeFilter;
+  const filteredDocuments = documents.filter((doc) => {
+    const docName = doc.name || '';
+    const staffName = doc.staff?.full_name || 'System';
+    const docCategory = doc.category?.name || 'Other';
+    const docType = doc.file_type || '';
+
+    const matchesSearch = docName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      staffName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = categoryFilter === 'All Categories' || docCategory === categoryFilter;
+    const matchesType = typeFilter === 'All Types' || docType.includes(typeFilter.toLowerCase());
     const matchesStatus = statusFilter === 'All Status' || doc.status === statusFilter;
+    
     return matchesSearch && matchesCategory && matchesType && matchesStatus;
   });
 
@@ -210,10 +216,10 @@ function DocumentsPage() {
   };
 
   const stats = {
-    total: mockDocuments.length,
-    pending: mockDocuments.filter((d) => d.status === 'pending').length,
-    approved: mockDocuments.filter((d) => d.status === 'approved').length,
-    totalSize: mockDocuments.reduce((sum, d) => sum + d.size, 0),
+    total: documents.length,
+    pending: documents.filter((d: any) => d.status === 'pending').length,
+    approved: documents.filter((d: any) => d.status === 'approved').length,
+    totalSize: documents.reduce((sum: number, d: any) => sum + (d.file_size || 0), 0),
   };
 
   return (
@@ -240,7 +246,10 @@ function DocumentsPage() {
                   Upload a new document to the system.
                 </DialogDescription>
               </DialogHeader>
-              <DocumentUploadForm onSuccess={() => setIsUploadOpen(false)} />
+              <DocumentUploadForm onSuccess={() => {
+                 setIsUploadOpen(false);
+                 queryClient.invalidateQueries({ queryKey: ['documents'] });
+              }} />
             </DialogContent>
           </Dialog>
         </div>
@@ -362,89 +371,106 @@ function DocumentsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Document</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Staff</TableHead>
-                      <TableHead>Size</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredDocuments.map((doc) => (
-                      <TableRow key={doc.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            {getFileIcon(doc.type)}
-                            <div>
-                              <p className="font-medium truncate max-w-[200px]">{doc.name}</p>
-                              <p className="text-xs text-muted-foreground capitalize">
-                                {doc.type} file
-                              </p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{doc.category}</Badge>
-                        </TableCell>
-                        <TableCell>{doc.staff_name}</TableCell>
-                        <TableCell>{formatFileSize(doc.size)}</TableCell>
-                        <TableCell>{getStatusBadge(doc.status)}</TableCell>
-                        <TableCell>{doc.created_at}</TableCell>
-                        <TableCell className="text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="cursor-pointer">
-                                <Eye className="mr-2 h-4 w-4" />
-                                View
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer">
-                                <Download className="mr-2 h-4 w-4" />
-                                Download
-                              </DropdownMenuItem>
-                                                      <DropdownMenuItem className="cursor-pointer">
-                                <Share2 className="mr-2 h-4 w-4" />
-                                Share
-                                                      </DropdownMenuItem>
-                              {canManageDocuments && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  {doc.status === 'pending' && (
-                                    <>
-                                      <DropdownMenuItem className="cursor-pointer text-green-600">
-                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                        Approve
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="cursor-pointer text-red-600">
-                                        <XCircle className="mr-2 h-4 w-4" />
-                                        Reject
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                  <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer">
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                {isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+                    <p className="text-muted-foreground">Loading documents...</p>
+                  </div>
+                ) : filteredDocuments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <FolderOpen className="h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold">No documents found</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or upload a new document.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Document</TableHead>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Staff</TableHead>
+                        <TableHead>Size</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDocuments.map((doc: any) => (
+                        <TableRow key={doc.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              {getFileIcon(doc.file_type)}
+                              <div>
+                                <p className="font-medium truncate max-w-[200px]">{doc.name}</p>
+                                <p className="text-xs text-muted-foreground capitalize">
+                                  {doc.file_type} file
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{doc.category?.name || 'Other'}</Badge>
+                          </TableCell>
+                          <TableCell>{doc.staff?.full_name || 'System'}</TableCell>
+                          <TableCell>{formatFileSize(doc.file_size || 0)}</TableCell>
+                          <TableCell>{getStatusBadge(doc.status)}</TableCell>
+                          <TableCell>{format(new Date(doc.created_at), 'MMM d, yyyy')}</TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(doc.file_url, '_blank')}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => window.open(doc.file_url, '_blank')}>
+                                  <Download className="mr-2 h-4 w-4" />
+                                  Download
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="cursor-pointer">
+                                  <Share2 className="mr-2 h-4 w-4" />
+                                  Share
+                                </DropdownMenuItem>
+                                {canManageDocuments && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    {doc.status === 'pending' && (
+                                      <>
+                                        <DropdownMenuItem className="cursor-pointer text-green-600" onClick={() => updateStatusMutation.mutate({ id: doc.id, status: 'approved' })}>
+                                          <CheckCircle className="mr-2 h-4 w-4" />
+                                          Approve
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="cursor-pointer text-red-600" onClick={() => updateStatusMutation.mutate({ id: doc.id, status: 'rejected' })}>
+                                          <XCircle className="mr-2 h-4 w-4" />
+                                          Reject
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => {
+                                      if (confirm('Are you sure you want to delete this document?')) {
+                                        deleteDocumentMutation.mutate(doc.id);
+                                      }
+                                    }}>
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -475,12 +501,34 @@ function DocumentsPage() {
 }
 
 function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
+  const { profile, isSuperAdmin } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('other');
-  const [staffName, setStaffName] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [staffId, setStaffId] = useState(profile?.staff_id || '');
+
+  // Fetch categories
+  const { data: categories = [] } = useQuery({
+    queryKey: ['document-categories-form'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('document_categories').select('*').order('name');
+      if (error) return [];
+      return data;
+    }
+  });
+
+  // Fetch staff for admin selection
+  const { data: staffList = [] } = useQuery({
+    queryKey: ['staff-list-simple'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('staff_records').select('id, full_name').eq('status', 'active').order('full_name');
+      if (error) return [];
+      return data;
+    },
+    enabled: isSuperAdmin
+  });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -500,7 +548,12 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
 
   const handleUpload = async () => {
     if (!file) {
-      toast.error('Please select a file first');
+      handlePortalNotification('Please select a file first', { severity: 'warning' });
+      return;
+    }
+
+    if (!categoryId) {
+      handlePortalNotification('Please select a category', { severity: 'warning' });
       return;
     }
 
@@ -513,20 +566,22 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
       const { error } = await supabase
         .from('documents')
         .insert({
+          staff_id: staffId || null,
+          uploaded_by: profile?.id,
+          category_id: categoryId,
           name: name || file.name,
           file_url: res.secure_url,
           file_type: file.type.split('/')[1] || 'unknown',
           file_size: file.size,
-          category_id: category, // Assuming category ID matches for now
           status: 'pending'
         });
 
       if (error) throw error;
 
-      toast.success('Document uploaded successfully and awaiting review');
+      handlePortalNotification('Document uploaded successfully and awaiting review', { severity: 'success' });
       onSuccess();
     } catch (error: any) {
-      toast.error('Upload failed: ' + error.message);
+      handleDatabaseError(error, 'upload document');
     } finally {
       setIsUploading(false);
     }
@@ -589,27 +644,41 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Category</label>
-          <Select value={category} onValueChange={setCategory}>
+          <Select value={categoryId} onValueChange={setCategoryId}>
             <SelectTrigger>
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="appointment">Appointment</SelectItem>
-              <SelectItem value="credentials">Credentials</SelectItem>
-              <SelectItem value="personal">Personal</SelectItem>
-              <SelectItem value="payroll">Payroll</SelectItem>
-              <SelectItem value="leave">Leave</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Related Staff</label>
-          <Input 
-            placeholder="Search staff" 
-            value={staffName}
-            onChange={(e) => setStaffName(e.target.value)}
-          />
+          {isSuperAdmin ? (
+            <Select value={staffId} onValueChange={setStaffId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select staff" />
+              </SelectTrigger>
+              <SelectContent>
+                {staffList.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input 
+              value={profile?.full_name || ''} 
+              disabled 
+              className="bg-muted"
+            />
+          )}
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-4">

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -114,11 +115,10 @@ function StaffManagementPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff-records'] });
-      toast.success('User role updated successfully');
+      handlePortalNotification('User role updated successfully', { severity: 'success' });
+      setIsRoleDialogOpen(false);
     },
-    onError: (error: any) => {
-      toast.error('Failed to update role: ' + error.message);
-    },
+    onError: (error: any) => handleDatabaseError(error, 'update staff role'),
   });
 
   const [roleUpdateStaff, setRoleUpdateStaff] = useState<any>(null);
@@ -145,7 +145,10 @@ function StaffManagementPage() {
         .select('*')
         .eq('is_active', true)
         .order('name');
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch departments');
+        return [];
+      }
       return data;
     },
   });
@@ -163,7 +166,10 @@ function StaffManagementPage() {
           department:departments(name)
         `)
         .order('full_name');
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch staff records');
+        return [];
+      }
       return data;
     },
   });
@@ -178,11 +184,9 @@ function StaffManagementPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff-records'] });
-      toast.success('Staff record deleted successfully');
+      handlePortalNotification('Staff record deleted', { severity: 'success' });
     },
-    onError: (error) => {
-      toast.error('Failed to delete staff: ' + error.message);
-    },
+    onError: (error: any) => handleDatabaseError(error, 'delete staff record'),
   });
 
   const canManageStaff = canAccess('staff', 'create') || canAccess('staff', 'edit');
@@ -759,7 +763,7 @@ function StaffForm({
       toast.success(`Staff member registered successfully with ID: ${formData.readable_id}`);
       onSuccess();
     } catch (error: any) {
-      toast.error('Failed to add staff: ' + error.message);
+      handleDatabaseError(error, 'add staff');
     } finally {
       setIsSubmitting(false);
     }
@@ -771,21 +775,13 @@ function StaffForm({
 
     try {
       setIsSubmitting(true);
-      // Show local preview immediately if possible, or just use the Cloudinary URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        // We can set a temporary local URL if we want, but Cloudinary is fast enough
-        // and we already have setFormData below.
-      };
-      reader.readAsDataURL(file);
-      
       // Upload to Cloudinary
       const res = await uploadToCloudinary(file, 'passports');
 
       setFormData({ ...formData, passport_url: res.secure_url });
-      toast.success('Passport photo uploaded and displayed');
+      handlePortalNotification('Passport photo uploaded and displayed', { severity: 'success' });
     } catch (error: any) {
-      toast.error('Error uploading passport: ' + error.message);
+      handlePortalNotification('Error uploading passport: ' + error.message, { severity: 'error' });
     } finally {
       setIsSubmitting(false);
     }

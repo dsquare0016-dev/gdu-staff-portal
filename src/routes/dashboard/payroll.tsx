@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Tabs,
@@ -64,9 +65,29 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Scale,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AreaChartCard, BarChartCard } from '@/components/dashboard/charts';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { format, subMonths } from 'date-fns';
+
+const months = [
+  { label: 'January', value: '1' },
+  { label: 'February', value: '2' },
+  { label: 'March', value: '3' },
+  { label: 'April', value: '4' },
+  { label: 'May', value: '5' },
+  { label: 'June', value: '6' },
+  { label: 'July', value: '7' },
+  { label: 'August', value: '8' },
+  { label: 'September', value: '9' },
+  { label: 'October', value: '10' },
+  { label: 'November', value: '11' },
+  { label: 'December', value: '12' },
+];
 
 export const Route = createFileRoute('/dashboard/payroll')({
   head: () => ({
@@ -75,169 +96,116 @@ export const Route = createFileRoute('/dashboard/payroll')({
   component: PayrollPage,
 });
 
-const mockTransactions = [
-  { id: '1', type: 'income', amount: 150000000, source: 'State Allocation', category: 'Allocation', date: '2026-05-01', status: 'completed' },
-  { id: '2', type: 'expenditure', amount: 55000000, source: 'Staff Salaries', category: 'Payroll', date: '2026-05-25', status: 'completed' },
-  { id: '3', type: 'expenditure', amount: 12000000, source: 'Office Maintenance', category: 'Operations', date: '2026-05-20', status: 'completed' },
-  { id: '4', type: 'income', amount: 5000000, source: 'Grant', category: 'Grant', date: '2026-05-15', status: 'completed' },
-  { id: '5', type: 'expenditure', amount: 8500000, source: 'ICT Infrastructure', category: 'ICT', date: '2026-05-10', status: 'completed' },
-];
-
-const financialTrend = [
-  { name: 'Jan', income: 120000000, expenditure: 80000000 },
-  { name: 'Feb', income: 130000000, expenditure: 85000000 },
-  { name: 'Mar', income: 110000000, expenditure: 95000000 },
-  { name: 'Apr', income: 150000000, expenditure: 90000000 },
-  { name: 'May', income: 155000000, expenditure: 75000000 },
-];
-
-const mockPayroll = [
-  {
-    id: '1',
-    staff_name: 'Adebayo Johnson',
-    staff_email: 'adebayo.johnson@gdu.gov.ng',
-    department: 'Administration',
-    basic_salary: 350000,
-    allowances: 150000,
-    deductions: 45000,
-    net_salary: 455000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-    payment_date: '2026-05-25',
-  },
-  {
-    id: '2',
-    staff_name: 'Grace Okonkwo',
-    staff_email: 'grace.okonkwo@gdu.gov.ng',
-    department: 'Finance',
-    basic_salary: 550000,
-    allowances: 250000,
-    deductions: 80000,
-    net_salary: 720000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-    payment_date: '2026-05-25',
-  },
-  {
-    id: '3',
-    staff_name: 'Emmanuel Obi',
-    staff_email: 'emmanuel.obi@gdu.gov.ng',
-    department: 'ICT',
-    basic_salary: 700000,
-    allowances: 300000,
-    deductions: 100000,
-    net_salary: 900000,
-    month: 5,
-    year: 2026,
-    status: 'pending',
-    payment_date: null,
-  },
-  {
-    id: '4',
-    staff_name: 'Fatima Bello',
-    staff_email: 'fatima.bello@gdu.gov.ng',
-    department: 'Operations',
-    basic_salary: 280000,
-    allowances: 120000,
-    deductions: 35000,
-    net_salary: 365000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-    payment_date: '2026-05-25',
-  },
-  {
-    id: '5',
-    staff_name: 'Chidi Okafor',
-    staff_email: 'chidi.okafor@gdu.gov.ng',
-    department: 'HR',
-    basic_salary: 320000,
-    allowances: 140000,
-    deductions: 42000,
-    net_salary: 418000,
-    month: 5,
-    year: 2026,
-    status: 'failed',
-    payment_date: null,
-  },
-];
-
-const mockAllowances = [
-  {
-    id: '1',
-    staff_name: 'Adebayo Johnson',
-    type: 'Housing',
-    amount: 50000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-  },
-  {
-    id: '2',
-    staff_name: 'Adebayo Johnson',
-    type: 'Transport',
-    amount: 30000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-  },
-  {
-    id: '3',
-    staff_name: 'Adebayo Johnson',
-    type: 'Medical',
-    amount: 25000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-  },
-  {
-    id: '4',
-    staff_name: 'Grace Okonkwo',
-    type: 'Housing',
-    amount: 75000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-  },
-  {
-    id: '5',
-    staff_name: 'Grace Okonkwo',
-    type: 'Transport',
-    amount: 45000,
-    month: 5,
-    year: 2026,
-    status: 'paid',
-  },
-];
-
-const departments = ['All Departments', 'Administration', 'Finance', 'ICT', 'Operations', 'HR'];
-const months = [
-  { value: '5', label: 'May 2026' },
-  { value: '4', label: 'April 2026' },
-  { value: '3', label: 'March 2026' },
-];
-
 function PayrollPage() {
-  const { isAccounts, isSuperAdmin, isDirector, isAdmin, isICT } = useAuth();
+  const { isAccounts, isSuperAdmin, isDirector, isAdmin, isICT, profile } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
-  const [monthFilter, setMonthFilter] = useState('5');
+  const [monthFilter, setMonthFilter] = useState(new Date().getMonth() + 1 + '');
   const [isAddPayrollOpen, setIsAddPayrollOpen] = useState(false);
   const [isAddAllowanceOpen, setIsAddAllowanceOpen] = useState(false);
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
+
+  // 1. Fetch Transactions
+  const { data: transactions = [], isLoading: isLoadingTxns } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('transactions').select('*').order('created_at', { descending: true });
+      if (error) {
+        handleDatabaseError(error, 'fetch transactions');
+        return [];
+      }
+      return data;
+    }
+  });
+
+  // 2. Fetch Payroll Records
+  const { data: payrollRecords = [], isLoading: isLoadingPayroll } = useQuery({
+    queryKey: ['payroll-records', monthFilter],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payroll')
+        .select(`
+          *,
+          staff:staff_records(full_name, email, department:departments(name))
+        `)
+        .eq('month', parseInt(monthFilter))
+        .eq('year', new Date().getFullYear());
+      
+      if (error) {
+        handleDatabaseError(error, 'fetch payroll records');
+        return [];
+      }
+      return data;
+    }
+  });
+
+  // 3. Fetch Allowances
+  const { data: allowanceRecords = [], isLoading: isLoadingAllowances } = useQuery({
+    queryKey: ['allowance-records', monthFilter],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('allowances')
+        .select(`
+          *,
+          staff:staff_records(full_name)
+        `)
+        .eq('month', parseInt(monthFilter))
+        .eq('year', new Date().getFullYear());
+      
+      if (error) {
+        handleDatabaseError(error, 'fetch allowance records');
+        return [];
+      }
+      return data;
+    }
+  });
+
+  // 4. Fetch Departments
+  const { data: dbDepartments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('departments').select('name').eq('is_active', true);
+      if (error) return [];
+      return data.map(d => d.name);
+    }
+  });
+
+  const departments = ['All Departments', ...dbDepartments];
+
+  const financialTrend = useMemo(() => {
+    const now = new Date();
+    return [4, 3, 2, 1, 0].map(m => {
+      const date = subMonths(now, m);
+      const month = date.getMonth() + 1;
+      const year = date.getFullYear();
+      
+      const income = transactions
+        .filter(t => t.type === 'income' && new Date(t.created_at).getMonth() + 1 === month)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      
+      const expenditure = transactions
+        .filter(t => t.type === 'expenditure' && new Date(t.created_at).getMonth() + 1 === month)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      return { name: format(date, 'MMM'), income, expenditure };
+    });
+  }, [transactions]);
 
   const canModify = isAccounts || isSuperAdmin;
   const canDelete = isSuperAdmin;
   const canView = isAccounts || isSuperAdmin || isDirector || isAdmin || isICT;
 
-  const filteredPayroll = mockPayroll.filter((record) => {
+  const filteredPayroll = payrollRecords.filter((record) => {
+    const staffName = record.staff?.full_name || '';
+    const staffEmail = record.staff?.email || '';
+    const staffDept = record.staff?.department?.name || '';
+
     const matchesSearch =
-      record.staff_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.staff_email.toLowerCase().includes(searchQuery.toLowerCase());
+      staffName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      staffEmail.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDepartment =
-      departmentFilter === 'All Departments' || record.department === departmentFilter;
+      departmentFilter === 'All Departments' || staffDept === departmentFilter;
     return matchesSearch && matchesDepartment;
   });
 
@@ -267,15 +235,15 @@ function PayrollPage() {
     );
   };
 
-  const totalIncome = mockTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-  const totalExpenditure = mockTransactions.filter(t => t.type === 'expenditure').reduce((sum, t) => sum + t.amount, 0);
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
+  const totalExpenditure = transactions.filter(t => t.type === 'expenditure').reduce((sum, t) => sum + Number(t.amount), 0);
   const currentBalance = totalIncome - totalExpenditure;
 
-  const totalPayroll = mockPayroll.reduce((sum, p) => sum + p.net_salary, 0);
-  const pendingPayroll = mockPayroll
+  const totalPayroll = payrollRecords.reduce((sum, p) => sum + Number(p.net_salary), 0);
+  const pendingPayroll = payrollRecords
     .filter((p) => p.status === 'pending')
-    .reduce((sum, p) => sum + p.net_salary, 0);
-  const totalAllowances = mockAllowances.reduce((sum, a) => sum + a.amount, 0);
+    .reduce((sum, p) => sum + Number(p.net_salary), 0);
+  const totalAllowances = allowanceRecords.reduce((sum, a) => sum + Number(a.amount), 0);
 
   return (
     <DashboardLayout>
@@ -414,9 +382,9 @@ function PayrollPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockTransactions.slice(0, 5).map((t) => (
+                    {transactions.slice(0, 5).map((t) => (
                       <TableRow key={t.id}>
-                        <TableCell className="text-muted-foreground">{t.date}</TableCell>
+                        <TableCell className="text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</TableCell>
                         <TableCell className="font-medium">{t.source}</TableCell>
                         <TableCell>{t.category}</TableCell>
                         <TableCell>
@@ -466,10 +434,10 @@ function PayrollPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockTransactions.map((t) => (
+                    {transactions.map((t) => (
                       <TableRow key={t.id}>
-                        <TableCell>{t.date}</TableCell>
-                        <TableCell className="text-xs font-mono">TXN-{t.id}9283</TableCell>
+                        <TableCell>{new Date(t.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-xs font-mono">TXN-{t.id.slice(0, 8)}</TableCell>
                         <TableCell className="font-medium">{t.source}</TableCell>
                         <TableCell>{t.category}</TableCell>
                         <TableCell>
@@ -540,6 +508,7 @@ function PayrollPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff</TableHead>
+                      <TableHead>Department</TableHead>
                       <TableHead>Basic Salary</TableHead>
                       <TableHead>Allowances</TableHead>
                       <TableHead>Deductions</TableHead>
@@ -549,31 +518,45 @@ function PayrollPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockPayroll.map((record) => (
-                      <TableRow key={record.id}>
+                    {filteredPayroll.map((p: any) => (
+                      <TableRow key={p.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs">
-                              {record.staff_name.charAt(0)}
+                              {(p.staff?.full_name || 'U').charAt(0)}
                             </div>
                             <div>
-                              <p className="text-sm font-medium">{record.staff_name}</p>
-                              <p className="text-[10px] text-muted-foreground">{record.department}</p>
+                              <p className="text-sm font-medium">{p.staff?.full_name}</p>
+                              <p className="text-[10px] text-muted-foreground">{p.staff?.email}</p>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{formatCurrency(record.basic_salary)}</TableCell>
-                        <TableCell className="text-sm text-green-600">+{formatCurrency(record.allowances)}</TableCell>
-                        <TableCell className="text-sm text-red-600">-{formatCurrency(record.deductions)}</TableCell>
-                        <TableCell className="font-semibold">{formatCurrency(record.net_salary)}</TableCell>
-                        <TableCell>{getStatusBadge(record.status)}</TableCell>
-                        {canModify && (
-                          <TableCell className="text-right">
-                             <Button variant="ghost" size="icon">
-                               <MoreVertical className="h-4 w-4" />
-                             </Button>
-                          </TableCell>
-                        )}
+                        <TableCell className="text-sm">{p.staff?.department?.name || 'N/A'}</TableCell>
+                        <TableCell className="text-sm">{formatCurrency(p.basic_salary)}</TableCell>
+                        <TableCell className="text-sm text-green-600">+{formatCurrency(p.allowances)}</TableCell>
+                        <TableCell className="text-sm text-red-600">-{formatCurrency(p.deductions)}</TableCell>
+                        <TableCell className="font-semibold">{formatCurrency(p.net_salary)}</TableCell>
+                        <TableCell>{getStatusBadge(p.status)}</TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem className="cursor-pointer">View Payslip</DropdownMenuItem>
+                              <DropdownMenuItem className="cursor-pointer">Download PDF</DropdownMenuItem>
+                              {canModify && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="cursor-pointer">Edit Salary</DropdownMenuItem>
+                                  <DropdownMenuItem className="cursor-pointer text-red-600">Mark as Failed</DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

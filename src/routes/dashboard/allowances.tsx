@@ -22,7 +22,7 @@ import {
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 import { format } from 'date-fns';
 import { 
   Dialog, 
@@ -56,11 +56,14 @@ function AllowancesPage() {
         .order('created_at', { descending: true });
 
       if (!isSuperAdmin && !isAccounts && !isDirector && !isAdmin) {
-        query = query.eq('staff_id', profile?.id);
+        query = query.eq('staff_id', profile?.staff_id);
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch allowances');
+        return [];
+      }
       return data;
     },
   });
@@ -70,7 +73,10 @@ function AllowancesPage() {
     enabled: canManage,
     queryFn: async () => {
       const { data, error } = await supabase.from('staff_records').select('id, full_name, readable_id');
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch staff list');
+        return [];
+      }
       return data;
     },
   });
@@ -82,9 +88,10 @@ function AllowancesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['allowances'] });
-      toast.success('Allowance processed successfully');
+      handlePortalNotification('Allowance processed successfully', { severity: 'success' });
       setIsDialogOpen(false);
     },
+    onError: (error: any) => handleDatabaseError(error, 'process allowance')
   });
 
   const [formData, setFormData] = useState({
@@ -105,7 +112,7 @@ function AllowancesPage() {
         amount: parseFloat(formData.amount),
       });
     } catch (error: any) {
-      toast.error('Error: ' + error.message);
+      // Handled by mutation onError
     } finally {
       setIsSubmitting(false);
     }

@@ -21,17 +21,22 @@ import {
   QrCode,
 } from 'lucide-react';
 import { QRGenerator } from '@/components/attendance/qr-generator';
+import { MonthlyAllowanceStaff } from '@/components/dashboard/monthly-allowance-staff';
+import { MonthlyAllowanceAccountant } from '@/components/dashboard/monthly-allowance-accountant';
+import { MonthlyAllowanceSummary } from '@/components/dashboard/monthly-allowance-summary';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { handleDatabaseError } from '@/lib/error-handler';
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { startOfWeek, endOfWeek, eachDayOfInterval, format, startOfMonth, subMonths } from 'date-fns';
 
 export const Route = createFileRoute('/dashboard/')({
   beforeLoad: async ({ context }) => {
@@ -44,45 +49,6 @@ export const Route = createFileRoute('/dashboard/')({
   component: DashboardPage,
 });
 
-const attendanceData = [
-  { name: 'Mon', present: 142, absent: 8, late: 6 },
-  { name: 'Tue', present: 145, absent: 5, late: 6 },
-  { name: 'Wed', present: 138, absent: 12, late: 6 },
-  { name: 'Thu', present: 148, absent: 4, late: 4 },
-  { name: 'Fri', present: 140, absent: 10, late: 6 },
-];
-
-const staffDistribution = [
-  { name: 'Administration', value: 35, color: '#1e3a8a' },
-  { name: 'Finance', value: 25, color: '#b45309' },
-  { name: 'Operations', value: 45, color: '#15803d' },
-  { name: 'ICT', value: 18, color: '#7e22ce' },
-  { name: 'HR', value: 15, color: '#be185d' },
-  { name: 'Others', value: 18, color: '#334155' },
-];
-
-const monthlyPayroll = [
-  { name: 'Jan', value: 45000000 },
-  { name: 'Feb', value: 48000000 },
-  { name: 'Mar', value: 52000000 },
-  { name: 'Apr', value: 49000000 },
-  { name: 'May', value: 55000000 },
-];
-
-const recentActivities = [
-  { id: '1', user: 'Adebayo Johnson', action: 'marked attendance', time: '5 mins ago', avatar: '' },
-  { id: '2', user: 'Grace Okonkwo', action: 'processed payroll', time: '1 hour ago', avatar: '' },
-  { id: '3', user: 'Emmanuel Obi', action: 'uploaded a document', time: '2 hours ago', avatar: '' },
-  { id: '4', user: 'Fatima Bello', action: 'applied for leave', time: '3 hours ago', avatar: '' },
-  { id: '5', user: 'Chidi Okafor', action: 'updated staff record', time: '5 hours ago', avatar: '' },
-];
-
-const pendingApprovals = [
-  { id: '1', type: 'Leave Request', staff: 'Chidi Okafor', date: '2026-05-30' },
-  { id: '2', type: 'Document Approval', staff: 'Amina Ibrahim', date: '2026-05-29' },
-  { id: '3', type: 'Payroll Adjustment', staff: 'Multiple', date: '2026-05-28' },
-];
-
 function DashboardPage() {
   const { profile, isSuperAdmin, isAdmin, isAccounts, isDirector, isStaff, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
@@ -93,6 +59,179 @@ function DashboardPage() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // 1. Fetch Weekly Attendance Data
+  const { data: weeklyAttendance = [], isLoading: isLoadingAttendanceData } = useQuery({
+    queryKey: ['dashboard-weekly-attendance'],
+    queryFn: async () => {
+      const start = startOfWeek(new Date(), { weekStartsOn: 1 });
+      const end = endOfWeek(new Date(), { weekStartsOn: 1 });
+      
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('date, status')
+        .gte('date', start.toISOString().split('T')[0])
+        .lte('date', end.toISOString().split('T')[0]);
+      
+      if (error) {
+        handleDatabaseError(error, 'fetch weekly attendance');
+        return [];
+      }
+
+      const days = eachDayOfInterval({ start, end });
+      return days.map(day => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const dayRecords = data.filter(r => r.date === dateStr);
+        return {
+          name: format(day, 'EEE'),
+          present: dayRecords.filter(r => r.status === 'present').length,
+          absent: dayRecords.filter(r => r.status === 'absent').length,
+          late: dayRecords.filter(r => r.status === 'late').length,
+        };
+      });
+    },
+    enabled: !!profile && !userIsStaff,
+  });
+
+  // 2. Fetch Staff Distribution by Department
+  const { data: staffDistribution = [], isLoading: isLoadingDist } = useQuery({
+    queryKey: ['dashboard-staff-distribution'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select('department:departments(name)');
+      
+      if (error) {
+        handleDatabaseError(error, 'fetch staff distribution');
+        return [];
+      }
+
+      const counts: Record<string, number> = {};
+      data.forEach(r => {
+        const deptName = r.department?.name || 'Unassigned';
+        counts[deptName] = (counts[deptName] || 0) + 1;
+      });
+
+      const colors = ['#1e3a8a', '#b45309', '#15803d', '#7e22ce', '#be188a', '#334155'];
+      return Object.entries(counts).map(([name, value], index) => ({
+        name,
+        value,
+        color: colors[index % colors.length]
+      }));
+    },
+    enabled: !!profile && !userIsStaff,
+  });
+
+  // 3. Fetch Monthly Payroll Trend
+  const { data: payrollTrend = [], isLoading: isLoadingPayroll } = useQuery({
+    queryKey: ['dashboard-payroll-trend'],
+    queryFn: async () => {
+      const now = new Date();
+      const months = Array.from({ length: 5 }).map((_, i) => subMonths(now, 4 - i));
+      
+      const { data, error } = await supabase
+        .from('payroll')
+        .select('month, year, net_salary');
+      
+      if (error) {
+        handleDatabaseError(error, 'fetch payroll trend');
+        return [];
+      }
+
+      return months.map(m => {
+        const monthNum = m.getMonth() + 1;
+        const yearNum = m.getFullYear();
+        const monthData = data.filter(r => r.month === monthNum && r.year === yearNum);
+        const total = monthData.reduce((sum, r) => sum + Number(r.net_salary), 0);
+        return {
+          name: format(m, 'MMM'),
+          value: total || 0
+        };
+      });
+    },
+    enabled: !!profile && !userIsStaff,
+  });
+
+  // 4. Fetch Recent Activity (Audit Logs)
+  const { data: recentActivities = [], isLoading: isLoadingActivities } = useQuery({
+    queryKey: ['dashboard-recent-activities'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('id, action, created_at, user:profiles(full_name, avatar_url)')
+        .order('created_at', { descending: true })
+        .limit(10);
+      
+      if (error) {
+        // Don't show toast for this one as it's less critical
+        console.error('Error fetching audit logs:', error);
+        return [];
+      }
+
+      return data.map(log => ({
+        id: log.id,
+        user: log.user?.full_name || 'System',
+        action: log.action.toLowerCase(),
+        time: format(new Date(log.created_at), 'p'),
+        avatar: log.user?.avatar_url || ''
+      }));
+    },
+    enabled: !!profile && !userIsStaff,
+  });
+
+  // 5. Fetch Pending Approvals
+  const { data: pendingApprovals = [], isLoading: isLoadingApprovals } = useQuery({
+    queryKey: ['dashboard-pending-approvals'],
+    queryFn: async () => {
+      const [leaves, allowances, docs] = await Promise.all([
+        supabase.from('leave_requests').select('id, staff:staff_records(full_name), created_at').eq('status', 'pending').limit(5),
+        supabase.from('monthly_allowance_requests' as any).select('id, staff:staff_records(full_name), created_at').eq('status', 'Processing').limit(5),
+        supabase.from('documents').select('id, name, staff:staff_records(full_name), created_at').eq('status', 'pending').limit(5)
+      ]);
+
+      const allPending: any[] = [];
+      
+      leaves.data?.forEach(l => allPending.push({
+        id: l.id,
+        type: 'Leave Request',
+        staff: l.staff?.full_name || 'Unknown',
+        date: format(new Date(l.created_at), 'yyyy-MM-dd')
+      }));
+
+      allowances.data?.forEach(a => allPending.push({
+        id: a.id,
+        type: 'Allowance Request',
+        staff: a.staff?.full_name || 'Unknown',
+        date: format(new Date(a.created_at), 'yyyy-MM-dd')
+      }));
+
+      docs.data?.forEach(d => allPending.push({
+        id: d.id,
+        type: `Document: ${d.name}`,
+        staff: d.staff?.full_name || 'Unknown',
+        date: format(new Date(d.created_at), 'yyyy-MM-dd')
+      }));
+
+      return allPending.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+    },
+    enabled: !!profile && !userIsStaff,
+  });
+
+  // 6. Fetch Global Stats for Admin
+  const { data: globalStats } = useQuery({
+    queryKey: ['dashboard-global-stats'],
+    queryFn: async () => {
+      const [docs, depts] = await Promise.all([
+        supabase.from('documents').select('*', { count: 'exact', head: true }),
+        supabase.from('departments').select('*', { count: 'exact', head: true }).eq('is_active', true)
+      ]);
+      return {
+        totalDocuments: docs.count || 0,
+        totalDepartments: depts.count || 0
+      };
+    },
+    enabled: !!profile && !userIsStaff,
+  });
 
   // Fetch personal allowances for staff
   const { data: myAllowances = [] } = useQuery({
@@ -266,6 +405,19 @@ function DashboardPage() {
           </div>
         )}
 
+        {/* Monthly Allowance Management/Summary for Admin/Accountant/DG/etc */}
+        {!userIsStaff && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-primary" />
+                Monthly Allowance System
+              </h2>
+            </div>
+            {isAccounts ? <MonthlyAllowanceAccountant /> : <MonthlyAllowanceSummary />}
+          </div>
+        )}
+
         {/* Staff Personal Stats */}
         {userIsStaff && (
           <div className="grid gap-6 md:grid-cols-12">
@@ -290,6 +442,9 @@ function DashboardPage() {
                   description="Today's status"
                 />
               </div>
+
+              {/* Monthly Allowance Section */}
+              <MonthlyAllowanceStaff />
 
               {/* Personal Allowances Card */}
               <Card className="border shadow-sm">
@@ -367,21 +522,20 @@ function DashboardPage() {
             <StatCard
               title="Pending Approvals"
               value={pendingApprovals.length}
-              subtitle="Awaiting your review"
+              subtitle={isLoadingApprovals ? "Loading..." : "Awaiting your review"}
               icon={AlertCircle}
               variant="danger"
             />
             <StatCard
               title="Documents Uploaded"
-              value="1,245"
-              subtitle="This month"
+              value={globalStats?.totalDocuments || 0}
+              subtitle="Total in system"
               icon={FileText}
-              trend={{ value: 12, isPositive: true }}
             />
             <StatCard
               title="Active Departments"
-              value="8"
-              subtitle="All operational"
+              value={globalStats?.totalDepartments || 0}
+              subtitle="Operational units"
               icon={Activity}
               variant="success"
             />
@@ -393,7 +547,8 @@ function DashboardPage() {
             <BarChartCard
               title="Weekly Attendance Overview"
               description="Present, absent and late attendance"
-              data={attendanceData}
+              data={weeklyAttendance}
+              isLoading={isLoadingAttendanceData}
               bars={[
                 { dataKey: 'present', color: '#16a34a', name: 'Present' },
                 { dataKey: 'absent', color: '#dc2626', name: 'Absent' },
@@ -405,6 +560,7 @@ function DashboardPage() {
               title="Staff Distribution"
               description="By department"
               data={staffDistribution}
+              isLoading={isLoadingDist}
             />
           </div>
         )}
@@ -414,7 +570,8 @@ function DashboardPage() {
             <AreaChartCard
               title="Monthly Payroll Trend"
               description="Payroll expenditure over time"
-              data={monthlyPayroll}
+              data={payrollTrend}
+              isLoading={isLoadingPayroll}
               areas={[{ dataKey: 'value', color: 'var(--gold)', name: 'Expenditure' }]}
               className="lg:col-span-2"
             />
@@ -422,31 +579,39 @@ function DashboardPage() {
             <Card className="border backdrop-blur-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-lg">Recent Activity</CardTitle>
-                <Button variant="ghost" size="sm" className="text-primary">
-                  View All
-                  <ArrowRight className="ml-1 h-4 w-4" />
+                <Button variant="ghost" size="sm" className="text-primary" asChild>
+                  <Link to="/dashboard/settings/audit-logs">
+                    View All
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
                 </Button>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[280px]">
                   <div className="space-y-4">
-                    {recentActivities.map((activity) => (
-                      <div key={activity.id} className="flex items-start gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={activity.avatar} />
-                          <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs">
-                            {activity.user.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm">
-                            <span className="font-medium">{activity.user}</span>{' '}
-                            <span className="text-muted-foreground">{activity.action}</span>
-                          </p>
-                          <p className="text-xs text-muted-foreground">{activity.time}</p>
+                    {isLoadingActivities ? (
+                      <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
+                    ) : recentActivities.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground">No recent activity logged.</div>
+                    ) : (
+                      recentActivities.map((activity) => (
+                        <div key={activity.id} className="flex items-start gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={activity.avatar} />
+                            <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs">
+                              {activity.user.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm">
+                              <span className="font-medium">{activity.user}</span>{' '}
+                              <span className="text-muted-foreground">{activity.action}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">{activity.time}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </ScrollArea>
               </CardContent>
@@ -465,28 +630,34 @@ function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {pendingApprovals.map((approval) => (
-                    <div
-                      key={approval.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <FileText className="h-5 w-5 text-primary" />
+                  {isLoadingApprovals ? (
+                    <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
+                  ) : pendingApprovals.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">No pending approvals found.</div>
+                  ) : (
+                    pendingApprovals.map((approval) => (
+                      <div
+                        key={approval.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{approval.type}</p>
+                            <p className="text-xs text-muted-foreground">{approval.staff}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium">{approval.type}</p>
-                          <p className="text-xs text-muted-foreground">{approval.staff}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{approval.date}</span>
+                          <Button size="sm" variant="outline" asChild>
+                             <Link to={approval.type.includes('Leave') ? '/dashboard/staff' : approval.type.includes('Allowance') ? '/dashboard' : '/dashboard/documents'}>Review</Link>
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{approval.date}</span>
-                        <Button size="sm" variant="outline">
-                          Review
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>

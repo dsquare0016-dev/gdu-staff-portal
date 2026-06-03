@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +32,19 @@ import {
   Filter,
   RefreshCw,
   Eye,
+  Loader2,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { exportToPDF, exportToExcel, exportToCSV } from '@/lib/utils/export';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { startOfMonth, subMonths, format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 
 export const Route = createFileRoute('/dashboard/reports')({
   head: () => ({
@@ -41,58 +53,134 @@ export const Route = createFileRoute('/dashboard/reports')({
   component: ReportsPage,
 });
 
-const attendanceTrend = [
-  { name: 'Week 1', present: 142, absent: 8, late: 6 },
-  { name: 'Week 2', present: 145, absent: 6, late: 5 },
-  { name: 'Week 3', present: 140, absent: 10, late: 6 },
-  { name: 'Week 4', present: 148, absent: 4, late: 4 },
-];
-
-const staffByDepartment = [
-  { name: 'Administration', value: 35, color: 'hsl(var(--primary))' },
-  { name: 'Finance', value: 25, color: 'hsl(var(--gold))' },
-  { name: 'Operations', value: 45, color: 'hsl(142 76% 36%)' },
-  { name: 'ICT', value: 18, color: 'hsl(340 75% 55%)' },
-  { name: 'HR', value: 15, color: 'hsl(25 95% 53%)' },
-  { name: 'Others', value: 18, color: 'hsl(280 67% 52%)' },
-];
-
-const payrollTrend = [
-  { name: 'Jan', value: 45000000 },
-  { name: 'Feb', value: 48000000 },
-  { name: 'Mar', value: 52000000 },
-  { name: 'Apr', value: 49000000 },
-  { name: 'May', value: 55000000 },
-];
-
-const leaveStats = [
-  { name: 'Annual', value: 45, color: 'hsl(142 76% 36%)' },
-  { name: 'Sick', value: 20, color: 'hsl(0 84% 60%)' },
-  { name: 'Maternity', value: 12, color: 'hsl(340 75% 55%)' },
-  { name: 'Paternity', value: 8, color: 'hsl(25 95% 53%)' },
-  { name: 'Study', value: 5, color: 'hsl(280 67% 52%)' },
-];
-
-const monthlyNewStaff = [
-  { name: 'Jan', value: 3 },
-  { name: 'Feb', value: 5 },
-  { name: 'Mar', value: 2 },
-  { name: 'Apr', value: 8 },
-  { name: 'May', value: 4 },
-];
-
-import { exportToPDF, exportToExcel, exportToCSV } from '@/lib/utils/export';
-import { toast } from 'sonner';
-import { useQueryClient } from '@tanstack/react-query';
-
 function ReportsPage() {
   const { canAccess } = useAuth();
   const queryClient = useQueryClient();
   const [dateRange, setDateRange] = useState('this-month');
-  const [department, setDepartment] = useState('all');
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleExport = async (format: 'pdf' | 'excel' | 'csv') => {
+  // 1. Fetch Attendance Trend
+  const { data: attendanceTrend = [], isLoading: isLoadingAttendance } = useQuery({
+    queryKey: ['reports-attendance-trend'],
+    queryFn: async () => {
+      const now = new Date();
+      const weeks = [3, 2, 1, 0].map(w => {
+        const start = startOfWeek(subMonths(now, 0), { weekStartsOn: 1 });
+        // Simplified for now: just get last 4 weeks
+        return { start: startOfWeek(new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000)), end: endOfWeek(new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000)) };
+      });
+
+      const results = [];
+      for (const [index, week] of weeks.entries()) {
+        const { data, error } = await supabase
+          .from('attendance')
+          .select('status')
+          .gte('date', week.start.toISOString().split('T')[0])
+          .lte('date', week.end.toISOString().split('T')[0]);
+        
+        if (error) continue;
+        results.push({
+          name: `Week ${index + 1}`,
+          present: data.filter(r => r.status === 'present').length,
+          absent: data.filter(r => r.status === 'absent').length,
+          late: data.filter(r => r.status === 'late').length,
+        });
+      }
+      return results;
+    }
+  });
+
+  // 2. Fetch Staff Distribution
+  const { data: staffByDepartment = [], isLoading: isLoadingDist } = useQuery({
+    queryKey: ['reports-staff-dist'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('staff_records').select('department:departments(name)');
+      if (error) return [];
+      const counts: Record<string, number> = {};
+      data.forEach(r => {
+        const name = r.department?.name || 'Other';
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      const colors = ['#1e3a8a', '#b45309', '#15803d', '#7e22ce', '#be185d', '#334155'];
+      return Object.entries(counts).map(([name, value], i) => ({
+        name, value, color: colors[i % colors.length]
+      }));
+    }
+  });
+
+  // 3. Fetch Payroll Trend
+  const { data: payrollTrend = [], isLoading: isLoadingPayroll } = useQuery({
+    queryKey: ['reports-payroll-trend'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('payroll').select('month, year, net_salary');
+      if (error) return [];
+      const now = new Date();
+      return [4, 3, 2, 1, 0].map(m => {
+        const date = subMonths(now, m);
+        const month = date.getMonth() + 1;
+        const year = date.getFullYear();
+        const total = data.filter(r => r.month === month && r.year === year).reduce((sum, r) => sum + Number(r.net_salary), 0);
+        return { name: format(date, 'MMM'), value: total };
+      });
+    }
+  });
+
+  // 4. Fetch Leave Stats
+  const { data: leaveStats = [], isLoading: isLoadingLeave } = useQuery({
+    queryKey: ['reports-leave-stats'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('leave_requests').select('type');
+      if (error) return [];
+      const counts: Record<string, number> = {};
+      data.forEach(r => {
+        counts[r.type] = (counts[r.type] || 0) + 1;
+      });
+      const colors = ['#15803d', '#dc2626', '#be185d', '#f59e0b', '#7e22ce'];
+      return Object.entries(counts).map(([name, value], i) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1), 
+        value, 
+        color: colors[i % colors.length]
+      }));
+    }
+  });
+
+  // 5. Fetch New Staff Trend
+  const { data: monthlyNewStaff = [] } = useQuery({
+    queryKey: ['reports-new-staff'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('staff_records').select('employment_date');
+      if (error) return [];
+      const now = new Date();
+      return [4, 3, 2, 1, 0].map(m => {
+        const date = subMonths(now, m);
+        const monthStr = format(date, 'yyyy-MM');
+        const count = data.filter(r => r.employment_date?.startsWith(monthStr)).length;
+        return { name: format(date, 'MMM'), value: count };
+      });
+    }
+  });
+
+  // 6. Fetch Global Summary Stats
+  const { data: summaryStats } = useQuery({
+    queryKey: ['reports-summary-stats'],
+    queryFn: async () => {
+      const [staff, attendance, payroll, activeUsers] = await Promise.all([
+        supabase.from('staff_records').select('*', { count: 'exact', head: true }),
+        supabase.from('attendance').select('status').eq('date', new Date().toISOString().split('T')[0]),
+        supabase.from('payroll').select('net_salary').eq('month', new Date().getMonth() + 1),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).not('last_seen', 'is', null)
+      ]);
+
+      return {
+        totalStaff: staff.count || 0,
+        todayAttendance: attendance.data?.length ? (attendance.data.filter(r => r.status === 'present').length / staff.count! * 100).toFixed(1) : 0,
+        monthlyPayroll: payroll.data?.reduce((sum, r) => sum + Number(r.net_salary), 0) || 0,
+        activeUsers: activeUsers.count || 0
+      };
+    }
+  });
+
+  const handleExport = async (formatType: 'pdf' | 'excel' | 'csv') => {
     setIsExporting(true);
     try {
       const data = [
@@ -105,16 +193,16 @@ function ReportsPage() {
       const title = "GDU PORTAL - CONSOLIDATED WORKFORCE REPORT";
       const headers = ["Category", "Label", "Value"];
 
-      if (format === 'pdf') {
+      if (formatType === 'pdf') {
         exportToPDF({ data, filename, title, headers });
-      } else if (format === 'excel') {
+      } else if (formatType === 'excel') {
         exportToExcel({ data, filename });
       } else {
         exportToCSV({ data, filename });
       }
-      toast.success(`Report exported as ${format.toUpperCase()}`);
+      handlePortalNotification(`Report exported as ${formatType.toUpperCase()}`, { severity: 'success' });
     } catch (err: any) {
-      toast.error("Export failed: " + err.message);
+      handlePortalNotification("Export failed: " + err.message, { severity: 'error' });
     } finally {
       setIsExporting(false);
     }
@@ -122,7 +210,7 @@ function ReportsPage() {
 
   const handleRefresh = () => {
     queryClient.invalidateQueries();
-    toast.success("Reports data refreshed");
+    handlePortalNotification("Reports data refreshed", { severity: 'success' });
   };
 
   const canViewReports = canAccess('reports', 'view');
@@ -197,11 +285,7 @@ function ReportsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Staff</p>
-                  <p className="text-2xl font-bold">156</p>
-                  <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                    <TrendingUp className="h-3 w-3" />
-                    +5.2% from last month
-                  </p>
+                  <p className="text-2xl font-bold">{summaryStats?.totalStaff || 0}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
                   <Users className="h-5 w-5 text-primary" />
@@ -213,12 +297,8 @@ function ReportsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Avg. Attendance</p>
-                  <p className="text-2xl font-bold">91.2%</p>
-                  <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                    <TrendingUp className="h-3 w-3" />
-                    +2.3% from last week
-                  </p>
+                  <p className="text-sm text-muted-foreground">Today Attendance</p>
+                  <p className="text-2xl font-bold">{summaryStats?.todayAttendance || 0}%</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-green-500/20 flex items-center justify-center">
                   <Clock className="h-5 w-5 text-green-500" />
@@ -231,10 +311,7 @@ function ReportsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Monthly Payroll</p>
-                  <p className="text-2xl font-bold">{formatCurrency(55000000)}</p>
-                  <p className="text-xs text-yellow-600 flex items-center gap-1 mt-1">
-                    May 2026 disbursement
-                  </p>
+                  <p className="text-2xl font-bold">{formatCurrency(summaryStats?.monthlyPayroll || 0)}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
                   <DollarSign className="h-5 w-5 text-yellow-500" />
@@ -247,11 +324,7 @@ function ReportsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Active Users</p>
-                  <p className="text-2xl font-bold">142</p>
-                  <p className="text-xs text-blue-600 flex items-center gap-1 mt-1">
-                    <TrendingUp className="h-3 w-3" />
-                    91% of total staff
-                  </p>
+                  <p className="text-2xl font-bold">{summaryStats?.activeUsers || 0}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                   <BarChart3 className="h-5 w-5 text-blue-500" />
@@ -275,6 +348,7 @@ function ReportsPage() {
                 title="Attendance Trend"
                 description="Weekly attendance overview"
                 data={attendanceTrend}
+                isLoading={isLoadingAttendance}
                 bars={[
                   { dataKey: 'present', color: 'hsl(142 76% 36%)', name: 'Present' },
                   { dataKey: 'absent', color: 'hsl(0 84% 60%)', name: 'Absent' },
@@ -285,6 +359,7 @@ function ReportsPage() {
                 title="Staff Distribution"
                 description="By department"
                 data={staffByDepartment}
+                isLoading={isLoadingDist}
               />
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
@@ -292,6 +367,7 @@ function ReportsPage() {
                 title="Payroll Trend"
                 description="Monthly payroll expenditure"
                 data={payrollTrend}
+                isLoading={isLoadingPayroll}
                 areas={[{ dataKey: 'value', color: 'hsl(var(--gold))', name: 'Expenditure' }]}
               />
               <Card className="border backdrop-blur-sm">
@@ -305,47 +381,23 @@ function ReportsPage() {
                         <Users className="h-5 w-5 text-green-500" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">Active Staff</p>
+                        <p className="text-sm font-medium">Total Active Staff</p>
                         <p className="text-xs text-muted-foreground">Currently active</p>
                       </div>
                     </div>
-                    <p className="text-xl font-bold">142</p>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                        <Clock className="h-5 w-5 text-yellow-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Late Arrivals</p>
-                        <p className="text-xs text-muted-foreground">Today</p>
-                      </div>
-                    </div>
-                    <p className="text-xl font-bold">6</p>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                        <Users className="h-5 w-5 text-red-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Absent</p>
-                        <p className="text-xs text-muted-foreground">Today</p>
-                      </div>
-                    </div>
-                    <p className="text-xl font-bold">8</p>
+                    <p className="text-xl font-bold">{summaryStats?.totalStaff || 0}</p>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                        <Calendar className="h-5 w-5 text-blue-500" />
+                        <BarChart3 className="h-5 w-5 text-blue-500" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium">On Leave</p>
-                        <p className="text-xs text-muted-foreground">Currently</p>
+                        <p className="text-sm font-medium">Logged In Users</p>
+                        <p className="text-xs text-muted-foreground">In system</p>
                       </div>
                     </div>
-                    <p className="text-xl font-bold">4</p>
+                    <p className="text-xl font-bold">{summaryStats?.activeUsers || 0}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -358,6 +410,7 @@ function ReportsPage() {
                 title="Staff by Department"
                 description="Workforce distribution"
                 data={staffByDepartment}
+                isLoading={isLoadingDist}
               />
               <AreaChartCard
                 title="New Staff Joined"
@@ -366,32 +419,6 @@ function ReportsPage() {
                 areas={[{ dataKey: 'value', color: 'hsl(var(--primary))', name: 'New Staff' }]}
               />
             </div>
-            <Card className="border backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Staff Summary</CardTitle>
-                <CardDescription>Current staff statistics</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-4">
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
-                    <p className="text-3xl font-bold text-primary">156</p>
-                    <p className="text-sm text-muted-foreground">Total Staff</p>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
-                    <p className="text-3xl font-bold text-green-600">142</p>
-                    <p className="text-sm text-muted-foreground">Active</p>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
-                    <p className="text-3xl font-bold text-yellow-600">8</p>
-                    <p className="text-sm text-muted-foreground">Inactive</p>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
-                    <p className="text-3xl font-bold text-blue-600">6</p>
-                    <p className="text-sm text-muted-foreground">On Leave</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="attendance" className="space-y-4">
@@ -400,6 +427,7 @@ function ReportsPage() {
                 title="Attendance by Week"
                 description="Present, absent, and late trends"
                 data={attendanceTrend}
+                isLoading={isLoadingAttendance}
                 bars={[
                   { dataKey: 'present', color: 'hsl(142 76% 36%)', name: 'Present' },
                   { dataKey: 'absent', color: 'hsl(0 84% 60%)', name: 'Absent' },
@@ -410,6 +438,7 @@ function ReportsPage() {
                 title="Leave Type Distribution"
                 description="By leave category"
                 data={leaveStats}
+                isLoading={isLoadingLeave}
               />
             </div>
           </TabsContent>
@@ -420,32 +449,9 @@ function ReportsPage() {
                 title="Monthly Payroll"
                 description="Payroll expenditure trend"
                 data={payrollTrend}
+                isLoading={isLoadingPayroll}
                 areas={[{ dataKey: 'value', color: 'hsl(var(--gold))', name: 'Expenditure' }]}
               />
-              <Card className="border backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg">Payroll Summary</CardTitle>
-                  <CardDescription>May 2026</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <span className="text-sm">Basic Salary</span>
-                    <span className="font-semibold">{formatCurrency(38500000)}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <span className="text-sm">Allowances</span>
-                    <span className="font-semibold text-green-600">{formatCurrency(21500000)}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                    <span className="text-sm">Deductions</span>
-                    <span className="font-semibold text-red-600">-{formatCurrency(5000000)}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
-                    <span className="text-sm font-medium">Total Net Salary</span>
-                    <span className="font-bold text-lg">{formatCurrency(55000000)}</span>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           </TabsContent>
         </Tabs>

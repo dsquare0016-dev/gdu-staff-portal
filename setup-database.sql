@@ -173,3 +173,64 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.attendance;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.announcements;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.organogram;
+
+-- ============================================================
+-- 13. MONTHLY ALLOWANCE SYSTEM
+-- ============================================================
+
+-- Monthly Allowance Settings
+CREATE TABLE IF NOT EXISTS public.monthly_allowance_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    month INTEGER NOT NULL, -- 1-12
+    year INTEGER NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    set_by UUID REFERENCES public.profiles(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(month, year)
+);
+
+-- Monthly Allowance Requests
+CREATE TABLE IF NOT EXISTS public.monthly_allowance_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID NOT NULL REFERENCES public.staff_records(id) ON DELETE CASCADE,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    attendance_percentage INTEGER NOT NULL,
+    allowance_amount DECIMAL(12, 2) NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Processing' CHECK (status IN ('Not Requested', 'Processing', 'Approved', 'Paid', 'Rejected')),
+    requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    reviewed_by UUID REFERENCES public.profiles(id),
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    paid_at TIMESTAMP WITH TIME ZONE,
+    rejection_reason TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(staff_id, month, year)
+);
+
+-- RLS for Monthly Allowance
+ALTER TABLE public.monthly_allowance_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monthly_allowance_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Everyone can view allowance settings" ON public.monthly_allowance_settings
+    FOR SELECT USING (true);
+
+CREATE POLICY "Accountant manage allowance settings" ON public.monthly_allowance_settings
+    FOR ALL USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('accounts', 'super_admin'));
+
+CREATE POLICY "Staff view own allowance requests" ON public.monthly_allowance_requests
+    FOR SELECT USING (staff_id IN (SELECT id FROM public.staff_records WHERE user_id = auth.uid()));
+
+CREATE POLICY "Privileged roles view all allowance requests" ON public.monthly_allowance_requests
+    FOR SELECT USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'));
+
+CREATE POLICY "Staff create allowance requests" ON public.monthly_allowance_requests
+    FOR INSERT WITH CHECK (staff_id IN (SELECT id FROM public.staff_records WHERE user_id = auth.uid()));
+
+CREATE POLICY "Accountant update allowance requests" ON public.monthly_allowance_requests
+    FOR UPDATE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('accounts', 'super_admin'));
+
+-- Enable Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE public.monthly_allowance_settings;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.monthly_allowance_requests;

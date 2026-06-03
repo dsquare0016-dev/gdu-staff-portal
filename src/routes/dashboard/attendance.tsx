@@ -75,6 +75,7 @@ import { QRGenerator } from '@/components/attendance/qr-generator';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 
 export const Route = createFileRoute('/dashboard/attendance')({
   head: () => ({
@@ -235,9 +236,12 @@ function AttendancePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      // Also invalidate dashboard stats as they depend on attendance
+      queryClient.invalidateQueries({ queryKey: ['dashboard-weekly-attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-attendance-stats'] });
     },
-    onError: (error) => {
-      toast.error('Failed to update attendance: ' + error.message);
+    onError: (error: any) => {
+      handleDatabaseError(error, 'update attendance');
     },
   });
 
@@ -259,7 +263,7 @@ function AttendancePage() {
       }
     });
     
-    toast.success(`Attendance for ${record.staff?.full_name} verified`);
+    handlePortalNotification(`Attendance for ${record.staff?.full_name} verified`, { severity: 'success' });
   };
 
   const handleDecline = (record: any, newStatus: string) => {
@@ -275,7 +279,7 @@ function AttendancePage() {
         approved_at: null,
       }
     });
-    toast.error(`Attendance for ${record.staff?.full_name} declined and set to ${newStatus}`);
+    handlePortalNotification(`Attendance for ${record.staff?.full_name} declined and set to ${newStatus}`, { severity: 'warning' });
   };
 
   const handleApprove = (record: any) => {
@@ -287,7 +291,7 @@ function AttendancePage() {
         approved_at: new Date().toISOString(),
       }
     });
-    toast.success(`Attendance for ${record.staff?.full_name} approved`);
+    handlePortalNotification(`Attendance for ${record.staff?.full_name} approved`, { severity: 'success' });
   };
 
   const filteredAttendance = attendanceRecords.filter((record) => {

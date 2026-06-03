@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { handleDatabaseError } from '@/lib/error-handler';
 import {
   Table,
   TableBody,
@@ -74,7 +75,10 @@ function NominalRollPage() {
         .select('*')
         .eq('is_active', true)
         .order('name');
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch departments');
+        return [];
+      }
       return data;
     },
   });
@@ -92,7 +96,10 @@ function NominalRollPage() {
           department:departments(name)
         `)
         .order('full_name');
-      if (error) throw error;
+      if (error) {
+        handleDatabaseError(error, 'fetch nominal roll');
+        return [];
+      }
       return data;
     },
   });
@@ -315,56 +322,69 @@ function NominalRollPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="w-[60px]">S/No</TableHead>
-                    <TableHead>Full Name</TableHead>
-                    <TableHead>Rank/Position</TableHead>
-                    <TableHead>Grade Level</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Employment Date</TableHead>
-                    <TableHead>Qualification</TableHead>
-                    <TableHead>Gender</TableHead>
-                    <TableHead>State</TableHead>
-                  </TableRow>
-                </TableHeader>
-                  <TableBody>
-                  {filteredRoll.map((record, index) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
-                      <TableCell className="font-medium">{record.full_name}</TableCell>
-                      <TableCell>{record.position || record.rank}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          Level {record.grade_level} / Step {record.step}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{record.department?.name || 'N/A'}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            record.role === 'dg'
-                              ? 'default'
-                              : record.role === 'admin'
-                                ? 'secondary'
-                                : 'outline'
-                          }
-                        >
-                          {record.role.replace('_', ' ').toUpperCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{formatDate(record.employment_date)}</TableCell>
-                      <TableCell className="text-sm">{record.qualification || '—'}</TableCell>
-                      <TableCell className="capitalize">{record.gender || '—'}</TableCell>
-                      <TableCell>{record.state || '—'}</TableCell>
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
+                <p className="text-muted-foreground">Loading nominal roll data...</p>
+              </div>
+            ) : filteredRoll.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold">No records found</h3>
+                <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search query.</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-[60px]">S/No</TableHead>
+                      <TableHead>Full Name</TableHead>
+                      <TableHead>Rank/Position</TableHead>
+                      <TableHead>Grade Level</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Employment Date</TableHead>
+                      <TableHead>Qualification</TableHead>
+                      <TableHead>Gender</TableHead>
+                      <TableHead>State</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                    <TableBody>
+                    {filteredRoll.map((record, index) => (
+                      <TableRow key={record.id}>
+                        <TableCell className="font-medium">{index + 1}</TableCell>
+                        <TableCell className="font-medium">{record.full_name}</TableCell>
+                        <TableCell>{record.position || record.rank}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            Level {record.grade_level} / Step {record.step}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{record.department?.name || 'N/A'}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              record.role === 'dg'
+                                ? 'default'
+                                : record.role === 'admin'
+                                  ? 'secondary'
+                                  : 'outline'
+                            }
+                          >
+                            {record.role.replace('_', ' ').toUpperCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{formatDate(record.employment_date)}</TableCell>
+                        <TableCell className="text-sm">{record.qualification || '—'}</TableCell>
+                        <TableCell className="capitalize">{record.gender || '—'}</TableCell>
+                        <TableCell>{record.state || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 

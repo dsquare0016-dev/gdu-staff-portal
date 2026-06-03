@@ -47,7 +47,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 
 export const Route = createFileRoute('/dashboard/organogram')({
   head: () => ({
@@ -174,7 +174,7 @@ function OrganogramPage() {
       },
     };
     setNodes((nds) => nds.concat(newNode));
-    toast.success('New position added to builder');
+    handlePortalNotification('New position added to builder', { severity: 'success' });
   };
 
   const handleSave = async () => {
@@ -192,7 +192,7 @@ function OrganogramPage() {
           staff_name: node.data.name,
           department_name: node.data.department,
           role: node.data.role,
-          staff_id: node.data.staff_id,
+          staff_id: node.data.staff_id === 'unassigned' ? null : node.data.staff_id,
           parent_id: parentEdge ? parentEdge.source : null,
           position: node.position
         };
@@ -201,10 +201,10 @@ function OrganogramPage() {
       const { error: saveError } = await supabase.from('organogram').insert(nodesToSave);
       if (saveError) throw saveError;
 
-      toast.success('Organogram structure saved successfully');
+      handlePortalNotification('Organogram structure saved successfully', { severity: 'success' });
       queryClient.invalidateQueries({ queryKey: ['organogram-data'] });
     } catch (error: any) {
-      toast.error('Error saving organogram: ' + error.message);
+      handleDatabaseError(error, 'save organogram');
     } finally {
       setIsSaving(false);
     }
@@ -227,7 +227,7 @@ function OrganogramPage() {
       return node;
     }));
     setIsDialogOpen(false);
-    toast.success('Position updated');
+    handlePortalNotification('Position updated in builder', { severity: 'success' });
   };
 
   if (isLoading) {
@@ -361,7 +361,7 @@ function OrganogramPage() {
                   setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id));
                   setEdges((eds) => eds.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id));
                   setIsDialogOpen(false);
-                  toast.success('Position removed from structure');
+                  handlePortalNotification('Position removed from structure', { severity: 'warning' });
                 }}
               >
                 <Trash2 className="h-4 w-4" />
