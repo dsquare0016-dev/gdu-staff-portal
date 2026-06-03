@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, Landmark, Star, User, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ const ROLES = [
 import { useQuery } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: async ({ context }) => {
+    // TanStack Start server-side check (if cookies were used)
+    // For now, we rely on the component-level redirect for demo purposes
+  },
   head: () => ({
     meta: [
       { title: "Sign in — GDU Admin Portal | Kogi State Government" },
@@ -50,8 +54,16 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { profile, signIn } = useAuth();
+  const { profile, loading: authLoading, signIn } = useAuth();
   const navigate = useNavigate();
+
+  // If already logged in, redirect to dashboard
+  useEffect(() => {
+    if (!authLoading && profile) {
+      console.log("User authenticated, redirecting to dashboard...");
+      navigate({ to: "/dashboard" });
+    }
+  }, [profile, authLoading, navigate]);
 
   const { data: branding } = useQuery({
     queryKey: ['branding-settings'],
