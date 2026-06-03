@@ -37,44 +37,86 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  console.error("Dashboard Error:", error);
   const router = useRouter();
+
+  // Friendly explanations for common errors
+  const getFriendlyMessage = (err: Error) => {
+    const msg = err.message.toLowerCase();
+    if (msg.includes('is not defined')) {
+      return "A required component or icon was not found. This is usually due to a missing import.";
+    }
+    if (msg.includes('failed to fetch') || msg.includes('networkerror')) {
+      return "There seems to be a connection problem. Please check your internet and try again.";
+    }
+    if (msg.includes('supabase')) {
+      return "There was an issue communicating with the database. Please try again later.";
+    }
+    return "Something went wrong while rendering this page.";
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+      <div className="max-w-md w-full text-center">
+        <h1 className="text-xl font-bold tracking-tight text-foreground uppercase italic">
           This page didn't load
         </h1>
-        <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-left">
-          <p className="text-xs font-mono text-destructive break-words">
-            {error.message || 'An unknown error occurred'}
-          </p>
+        
+        <div className="mt-6 p-6 bg-destructive/5 border border-destructive/10 rounded-2xl text-left shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 h-4 w-4 rounded-full bg-destructive flex items-center justify-center shrink-0">
+              <span className="text-[10px] font-bold text-white">!</span>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-destructive">Reason:</p>
+              <p className="text-xs font-mono text-destructive/80 break-words leading-relaxed bg-white/50 p-2 rounded border border-destructive/5">
+                {error.message || 'An unknown error occurred'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-start gap-3">
+            <div className="mt-0.5 h-4 w-4 rounded-full bg-primary flex items-center justify-center shrink-0">
+              <span className="text-[10px] font-bold text-white">?</span>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-primary">Suggested Fix:</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {getFriendlyMessage(error)}
+              </p>
+            </div>
+          </div>
+
           {error.stack && (
-            <details className="mt-2">
-              <summary className="text-[10px] text-muted-foreground cursor-pointer uppercase tracking-wider">Stack Trace</summary>
-              <pre className="mt-2 text-[10px] overflow-auto max-h-40 text-muted-foreground">
+            <details className="mt-6 group">
+              <summary className="text-[10px] text-muted-foreground cursor-pointer uppercase tracking-widest font-bold flex items-center gap-2 hover:text-foreground transition-colors">
+                <span className="group-open:rotate-90 transition-transform">▶</span>
+                Stack Trace
+              </summary>
+              <pre className="mt-3 text-[10px] overflow-auto max-h-40 text-muted-foreground/60 bg-muted/30 p-3 rounded-xl border font-mono">
                 {error.stack}
               </pre>
             </details>
           )}
         </div>
-        <p className="mt-4 text-sm text-muted-foreground">
-          Something went wrong. You can try refreshing or head back home.
+
+        <p className="mt-6 text-sm text-muted-foreground font-medium">
+          The technical team has been notified.
         </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+        
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-95"
           >
             Try again
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex items-center justify-center rounded-xl border-2 border-primary/20 bg-background px-6 py-2.5 text-sm font-bold text-foreground transition-all hover:bg-muted active:scale-95"
           >
             Go home
           </a>

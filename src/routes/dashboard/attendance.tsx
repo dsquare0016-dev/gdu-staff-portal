@@ -61,6 +61,7 @@ import {
   LogOut,
   UserCheck,
   FileText,
+  ClipboardList,
   Wifi,
   WifiOff,
   ShieldCheck,

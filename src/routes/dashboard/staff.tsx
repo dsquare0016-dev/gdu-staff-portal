@@ -915,6 +915,10 @@ function StaffForm({
               <label className="text-sm font-medium">Employment Date</label>
               <Input type="date" value={formData.employment_date} onChange={(e) => setFormData({ ...formData, employment_date: e.target.value })} />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Retirement Date</label>
+              <Input type="date" value={formData.retirement_date} onChange={(e) => setFormData({ ...formData, retirement_date: e.target.value })} />
+            </div>
             {formData.role === 'adhoc' && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-destructive font-bold uppercase tracking-tight">Adhoc Expiry Date</label>
