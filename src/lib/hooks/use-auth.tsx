@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { supabase } from '@/integrations/supabase/client';
 import type { Profile, UserRole } from '@/types';
 import type { User, Session } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
@@ -35,10 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedDemoProfile = typeof window !== 'undefined' ? sessionStorage.getItem('gdu_demo_profile') : null;
       if (savedDemoProfile) {
         const parsedProfile = JSON.parse(savedDemoProfile);
-        setProfile(parsedProfile);
-        // Also set a mock user to satisfy any checks
-        setUser({ id: parsedProfile.id, email: parsedProfile.email } as User);
-        setLoading(false);
+        
+        // Check if profile ID is in the old format (contains 'demo-id-')
+        // and clear it if so to force a fresh login with valid UUIDs
+        if (parsedProfile.id && typeof parsedProfile.id === 'string' && parsedProfile.id.includes('demo-id-')) {
+          sessionStorage.removeItem('gdu_demo_profile');
+        } else {
+          setProfile(parsedProfile);
+          // Also set a mock user to satisfy any checks
+          setUser({ id: parsedProfile.id, email: parsedProfile.email } as User);
+          setLoading(false);
+        }
       }
     } catch (e) {
       console.error('Error parsing demo profile:', e);
@@ -185,12 +193,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ta: 'Technical Adviser',
         ict: 'ICT Support',
         staff: 'Staff Member',
+        adhoc: 'Adhoc Staff',
       };
 
       name = `${roleNames[role]} (Demo)`;
 
+      // Use static UUIDs for demo roles to avoid database issues
+      const demoUuids: Record<UserRole, string> = {
+        super_admin: '00000000-0000-0000-0000-000000000001',
+        admin: '00000000-0000-0000-0000-000000000002',
+        accounts: '00000000-0000-0000-0000-000000000003',
+        dg: '00000000-0000-0000-0000-000000000004',
+        ta: '00000000-0000-0000-0000-000000000005',
+        ict: '00000000-0000-0000-0000-000000000006',
+        staff: '00000000-0000-0000-0000-000000000007',
+        adhoc: '00000000-0000-0000-0000-000000000008',
+      };
+
       const demoProfile: Profile = {
-        id: "demo-id-" + role + "-" + Date.now(),
+        id: demoUuids[role],
         email: normalizedEmail,
         full_name: name,
         role: role,

@@ -341,11 +341,11 @@ CREATE TABLE IF NOT EXISTS public.organogram (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   staff_id      UUID REFERENCES public.staff_records(id) ON DELETE SET NULL,
   title         TEXT NOT NULL,
-  subtitle      TEXT,
-  parent_id     UUID REFERENCES public.organogram(id) ON DELETE SET NULL,
-  level         INTEGER NOT NULL DEFAULT 0,
-  sort_order    INTEGER NOT NULL DEFAULT 0,
-  department_id UUID REFERENCES public.departments(id) ON DELETE SET NULL,
+  staff_name    TEXT,
+  department_name TEXT,
+  role          TEXT,
+  parent_id     TEXT, -- Changed to TEXT to support temporary frontend IDs
+  position      JSONB,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -141,11 +141,11 @@ function ChatPage() {
     queryFn: async () => {
       let query = supabase
         .from('messages')
-        .select('*, profiles:sender_id(full_name, avatar_url)')
+        .select('*')
         .order('created_at', { ascending: true });
 
       if (chatType === 'chats') {
-        query = query.or(`and(sender_id.eq.${profile?.id},recipient_id.eq.${selectedChat}),and(sender_id.eq.${selectedChat},recipient_id.eq.${profile?.id})`);
+        query = query.or(`and(sender_id.eq.${profile?.id},receiver_id.eq.${selectedChat}),and(sender_id.eq.${selectedChat},receiver_id.eq.${profile?.id})`);
       } else {
         query = query.eq('group_id', selectedChat);
       }
@@ -155,7 +155,7 @@ function ChatPage() {
       
       // Mark as read
       if (data.length > 0) {
-        const unread = data.filter(m => !m.is_read && m.recipient_id === profile?.id);
+        const unread = data.filter(m => !m.is_read && m.receiver_id === profile?.id);
         if (unread.length > 0) {
           await supabase
             .from('messages')
@@ -214,12 +214,11 @@ function ChatPage() {
         .from('messages')
         .insert([{
           sender_id: profile?.id,
-          recipient_id: chatType === 'chats' ? selectedChat : null,
+          receiver_id: chatType === 'chats' ? selectedChat : null,
           group_id: chatType !== 'chats' ? selectedChat : null,
           content: newMessage,
           attachment_url: attachmentUrl,
           attachment_type: attachmentType,
-          reply_to_id: replyTo?.id,
         }]);
 
       if (error) throw error;

@@ -122,6 +122,20 @@ CREATE TABLE IF NOT EXISTS public.branding_settings (
     CONSTRAINT single_row CHECK (id = 1)
 );
 
+-- 8. Organogram
+CREATE TABLE IF NOT EXISTS public.organogram (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id UUID REFERENCES public.staff_records(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    staff_name TEXT,
+    department_name TEXT,
+    role TEXT,
+    parent_id TEXT,
+    position JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Seed Branding
 INSERT INTO public.branding_settings (id, portal_name) 
 VALUES (1, 'GDU Staff Portal') 
@@ -135,6 +149,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payroll ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.branding_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organogram ENABLE ROW LEVEL SECURITY;
 
 -- Simple Authenticated Access (Refine for production)
 CREATE POLICY "Public read branding" ON public.branding_settings FOR SELECT USING (true);
@@ -142,6 +157,8 @@ CREATE POLICY "Auth read departments" ON public.departments FOR SELECT USING (au
 CREATE POLICY "Auth read staff" ON public.staff_records FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Auth read attendance" ON public.attendance FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Auth read announcements" ON public.announcements FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Auth read organogram" ON public.organogram FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "SuperAdmin manage organogram" ON public.organogram FOR ALL USING (auth.role() = 'authenticated');
 
 -- Chat Policies
 CREATE POLICY "View own messages" ON public.messages FOR SELECT 
@@ -155,3 +172,4 @@ WITH CHECK (sender_id IN (SELECT id FROM public.staff_records WHERE user_id = au
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.attendance;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.announcements;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.organogram;

@@ -9,6 +9,7 @@ import {
   Plus,
   Save,
   Loader2,
+  Trash2,
   ZoomIn,
   ZoomOut,
   Maximize2,

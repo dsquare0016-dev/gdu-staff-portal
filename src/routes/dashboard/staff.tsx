@@ -716,18 +716,36 @@ function StaffForm({
     setIsSubmitting(true);
 
     try {
+      const insertData: any = {
+        ...formData,
+        grade_level: parseInt(formData.grade_level),
+        step: parseInt(formData.step),
+        retirement_date: formData.retirement_date || null,
+      };
+
+      // Only include adhoc_expiry if it's an adhoc role to avoid schema errors on some environments
+      if (formData.role === 'adhoc') {
+        insertData.adhoc_expiry = formData.adhoc_expiry || null;
+      }
+
       const { data, error } = await supabase
         .from('staff_records')
-        .insert([{
-          ...formData,
-          grade_level: parseInt(formData.grade_level),
-          step: parseInt(formData.step),
-          retirement_date: formData.retirement_date || null,
-          adhoc_expiry: formData.role === 'adhoc' ? formData.adhoc_expiry || null : null,
-        }])
+        .insert([insertData])
         .select();
 
-      if (error) throw error;
+      if (error) {
+        // Fallback for environments where adhoc_expiry might be missing from schema cache
+        if (error.message.includes('adhoc_expiry') && formData.role !== 'adhoc') {
+          delete insertData.adhoc_expiry;
+          const { data: retryData, error: retryError } = await supabase
+            .from('staff_records')
+            .insert([insertData])
+            .select();
+          if (retryError) throw retryError;
+        } else {
+          throw error;
+        }
+      }
 
       // Send Welcome Email
       await sendWelcomeEmail({

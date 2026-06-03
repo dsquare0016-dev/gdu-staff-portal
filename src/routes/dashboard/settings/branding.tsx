@@ -204,9 +204,9 @@ function BrandingSettings() {
           <CardContent className="p-6">
             <div className="grid gap-8 md:grid-cols-3">
               {[
-                { label: 'Nigerian Coat of Arms', field: 'logo_url', url: brandingData?.logo_url, badge: 'Seal 1' },
+                { label: 'GDU Logo (Primary)', field: 'logo_url', url: brandingData?.logo_url, badge: 'Seal 1' },
                 { label: 'Kogi State Logo', field: 'logo_url_2', url: (brandingData as any)?.logo_url_2, badge: 'Seal 2' },
-                { label: 'GDU Logo', field: 'logo_url_3', url: (brandingData as any)?.logo_url_3, badge: 'Seal 3' },
+                { label: 'Nigerian Coat of Arms', field: 'logo_url_3', url: (brandingData as any)?.logo_url_3, badge: 'Seal 3' },
               ].map((logo, idx) => (
                 <div key={logo.field} className="space-y-4">
                   <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">

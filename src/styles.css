@@ -71,6 +71,34 @@
   --shadow-card: 0 4px 20px -4px oklch(0.2 0.05 263 / 0.08);
 }
 
+.dark {
+  --background: oklch(0.12 0.02 263);
+  --foreground: oklch(0.98 0.005 250);
+  --card: oklch(0.14 0.02 263);
+  --card-foreground: oklch(0.98 0.005 250);
+  --popover: oklch(0.14 0.02 263);
+  --popover-foreground: oklch(0.98 0.005 250);
+
+  /* Adjust primary for dark mode visibility if needed, or keep government blue */
+  --primary: oklch(0.45 0.15 263);
+  --primary-foreground: oklch(0.98 0.005 250);
+  --primary-glow: oklch(0.55 0.18 263);
+
+  --secondary: oklch(0.2 0.03 263);
+  --secondary-foreground: oklch(0.98 0.005 250);
+  --muted: oklch(0.18 0.03 263);
+  --muted-foreground: oklch(0.65 0.03 250);
+  --accent: oklch(0.22 0.04 263);
+  --accent-foreground: oklch(0.98 0.005 250);
+
+  --border: oklch(0.25 0.03 263);
+  --input: oklch(0.25 0.03 263);
+  --ring: oklch(0.45 0.15 263);
+
+  --shadow-elegant: 0 20px 60px -20px oklch(0.1 0.01 263 / 0.5);
+  --shadow-card: 0 4px 20px -4px oklch(0.1 0.01 263 / 0.2);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

@@ -1,149 +1,199 @@
 import { useEffect, useRef, useState } from 'react';
-import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, CheckCircle2, XCircle, Camera, StopCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Camera, StopCircle, ScanQrCode, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function QRScanner() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isScannerActive, setIsScannerActive] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<{
     success: boolean;
     message: string;
     staff?: any;
   } | null>(null);
   
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [isSecureOrigin, setIsSecureOrigin] = useState(true);
 
-  const startScanner = () => {
+  useEffect(() => {
+    // Check if on a secure origin (HTTPS or localhost)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isHttps = window.location.protocol === 'https:';
+    setIsSecureOrigin(isLocalhost || isHttps);
+  }, []);
+
+  const startScanner = async () => {
+    setIsInitializing(true);
+    setCameraError(null);
     setIsScannerActive(true);
     
     // Small delay to ensure the #reader div is rendered
-    setTimeout(() => {
-      const scanner = new Html5QrcodeScanner(
-        "reader",
-        { 
+    setTimeout(async () => {
+      try {
+        const html5QrCode = new Html5Qrcode("reader");
+        scannerRef.current = html5QrCode;
+
+        const config = { 
           fps: 10, 
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0
-        },
-        /* verbose= */ false
-      );
+        };
 
-      async function onScanSuccess(decodedText: string) {
-        if (isProcessing) return;
-        
-        try {
-          setIsProcessing(true);
-          const data = JSON.parse(decodedText);
+        const onScanSuccess = async (decodedText: string) => {
+          if (isProcessing) return;
           
-          if (data.type !== 'GDU_ATTENDANCE') {
-            throw new Error('Invalid QR Code type');
-          }
-
-          // Record attendance
-          const { data: staff, error: staffError } = await supabase
-            .from('staff_records')
-            .select('*')
-            .eq('readable_id', data.staffId)
-            .single();
-
-          if (staffError || !staff) {
-            throw new Error('Staff record not found');
-          }
-
-          const now = new Date();
-          const today = now.toISOString().split('T')[0];
-          
-          // Check if already checked in today
-          const { data: existing, error: existingError } = await supabase
-            .from('attendance')
-            .select('*')
-            .eq('staff_id', staff.id)
-            .eq('date', today)
-            .single();
-
-          if (existing) {
-            // Update check-out
-            const { error: updateError } = await supabase
-              .from('attendance')
-              .update({ 
-                check_out: now.toLocaleTimeString(),
-                status: 'present'
-              })
-              .eq('id', existing.id);
-
-            if (updateError) throw updateError;
+          try {
+            setIsProcessing(true);
+            const data = JSON.parse(decodedText);
             
-            setScanResult({ 
-              success: true, 
-              message: `Check-out successful for ${staff.full_name}`,
-              staff 
-            });
-            toast.success(`Check-out: ${staff.full_name}`);
-          } else {
-            // Insert check-in
-            const { error: insertError } = await supabase
+            if (data.type !== 'GDU_ATTENDANCE') {
+              throw new Error('Invalid QR Code type');
+            }
+
+            // Record attendance
+            const { data: staff, error: staffError } = await supabase
+              .from('staff_records')
+              .select('*')
+              .eq('readable_id', data.staffId)
+              .single();
+
+            if (staffError || !staff) {
+              throw new Error('Staff record not found');
+            }
+
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            
+            // Check if already checked in today
+            const { data: existing, error: existingError } = await supabase
               .from('attendance')
-              .insert([{
-                staff_id: staff.id,
-                date: today,
-                check_in: now.toLocaleTimeString(),
-                status: now.getHours() > 9 ? 'late' : 'present'
-              }]);
+              .select('*')
+              .eq('staff_id', staff.id)
+              .eq('date', today)
+              .single();
 
-            if (insertError) throw insertError;
+            if (existing) {
+              // Update check-out
+              const { error: updateError } = await supabase
+                .from('attendance')
+                .update({ 
+                  check_out: now.toLocaleTimeString(),
+                  status: 'present'
+                })
+                .eq('id', existing.id);
 
-            setScanResult({ 
-              success: true, 
-              message: `Check-in successful for ${staff.full_name}`,
-              staff 
-            });
-            toast.success(`Check-in: ${staff.full_name}`);
+              if (updateError) throw updateError;
+              
+              setScanResult({ 
+                success: true, 
+                message: `Check-out successful for ${staff.full_name}`,
+                staff 
+              });
+              toast.success(`Check-out: ${staff.full_name}`);
+            } else {
+              // Insert check-in
+              const { error: insertError } = await supabase
+                .from('attendance')
+                .insert([{
+                  staff_id: staff.id,
+                  date: today,
+                  check_in: now.toLocaleTimeString(),
+                  status: now.getHours() > 9 ? 'late' : 'present'
+                }]);
+
+              if (insertError) throw insertError;
+
+              setScanResult({ 
+                success: true, 
+                message: `Check-in successful for ${staff.full_name}`,
+                staff 
+              });
+              toast.success(`Check-in: ${staff.full_name}`);
+            }
+
+          } catch (err: any) {
+            console.error('Scan Error:', err);
+            setScanResult({ success: false, message: err.message });
+            toast.error(err.message);
+          } finally {
+            setIsProcessing(false);
+            // Reset result after 5 seconds
+            setTimeout(() => setScanResult(null), 5000);
           }
+        };
 
-        } catch (err: any) {
-          console.error('Scan Error:', err);
-          setScanResult({ success: false, message: err.message });
-          toast.error(err.message);
-        } finally {
-          setIsProcessing(false);
-          // Reset result after 5 seconds
-          setTimeout(() => setScanResult(null), 5000);
+        // Try to get available cameras first to request permission properly
+        const devices = await Html5Qrcode.getCameras();
+        if (!devices || devices.length === 0) {
+          throw new Error('No cameras found on this device.');
         }
-      }
 
-      scanner.render(onScanSuccess, (err) => {
-        // Silently handle scan failures
-      });
-      
-      scannerRef.current = scanner;
-    }, 100);
+        // Start scanning with environment camera (rear camera if available)
+        // If not available, it will fall back to any available camera
+        await html5QrCode.start(
+          { facingMode: "environment" }, 
+          config, 
+          onScanSuccess,
+          () => {} // qrCodeErrorCallback (ignored)
+        );
+
+        setIsInitializing(false);
+      } catch (err: any) {
+        console.error('Camera initialization error:', err);
+        setCameraError(err.message || 'Could not access camera. Please ensure permissions are granted.');
+        setIsInitializing(false);
+        setIsScannerActive(false);
+        toast.error('Camera access failed');
+      }
+    }, 200);
   };
 
   const stopScanner = async () => {
-    if (scannerRef.current) {
+    if (scannerRef.current && scannerRef.current.isScanning) {
       try {
-        await scannerRef.current.clear();
+        await scannerRef.current.stop();
         scannerRef.current = null;
       } catch (e) {
-        console.error('Failed to clear scanner', e);
+        console.error('Failed to stop scanner', e);
       }
     }
     setIsScannerActive(false);
+    setIsInitializing(false);
   };
 
   useEffect(() => {
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(e => console.error('Failed to clear scanner', e));
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.stop().catch(e => console.error('Failed to clear scanner', e));
       }
     };
   }, []);
 
   return (
     <div className="space-y-4">
+      {!isSecureOrigin && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex gap-3 text-amber-800 text-xs">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <div className="space-y-1">
+            <p className="font-bold">Insecure Origin Detected</p>
+            <p>
+              Browsers block camera access on non-HTTPS sites (except localhost). 
+              If you are testing on a local network, you must enable the flag:
+            </p>
+            <code className="block bg-amber-100 p-1 rounded mt-1 select-all">
+              chrome://flags/#unsafely-treat-insecure-origin-as-secure
+            </code >
+            <p className="mt-1">
+              And add <span className="font-mono">{window.location.origin}</span> to the allowed list.
+            </p>
+          </div>
+        </div>
+      )}
+
       {!isScannerActive ? (
         <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl bg-muted/30 space-y-4">
           <div className="p-4 bg-primary/10 rounded-full">
@@ -155,8 +205,8 @@ export function QRScanner() {
               Click the button below to open your camera and scan a staff QR code.
             </p>
           </div>
-          <Button onClick={startScanner} size="lg" className="gap-2">
-            <Scan className="h-4 w-4" />
+          <Button onClick={startScanner} size="lg" className="gap-2" disabled={!isSecureOrigin}>
+            <ScanQrCode className="h-4 w-4" />
             Open Camera & Scan
           </Button>
         </div>
@@ -173,13 +223,29 @@ export function QRScanner() {
             </Button>
           </div>
           
-          <div id="reader" className="overflow-hidden rounded-xl border-2 border-primary/20 bg-black aspect-square max-w-[400px] mx-auto"></div>
+          <div className="relative overflow-hidden rounded-xl border-2 border-primary/20 bg-black aspect-square max-w-[400px] mx-auto">
+            <div id="reader" className="w-full h-full"></div>
+            
+            {isInitializing && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-xs font-bold uppercase tracking-widest">Accessing Camera...</p>
+              </div>
+            )}
+          </div>
           
           <div className="bg-muted/50 p-4 rounded-lg border text-center">
             <p className="text-xs text-muted-foreground italic">
               Position the QR code within the square to scan automatically.
             </p>
           </div>
+        </div>
+      )}
+
+      {cameraError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3 text-red-800 text-xs">
+          <XCircle className="h-4 w-4 shrink-0" />
+          <p>{cameraError}</p>
         </div>
       )}
       
@@ -206,4 +272,5 @@ export function QRScanner() {
     </div>
   );
 }
+
 

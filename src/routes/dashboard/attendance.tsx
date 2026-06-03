@@ -68,7 +68,7 @@ import {
   ShieldAlert,
   Loader2,
   QrCode,
-  Scan,
+  ScanQrCode,
 } from 'lucide-react';
 import { QRScanner } from '@/components/attendance/qr-scanner';
 import { QRGenerator } from '@/components/attendance/qr-generator';
@@ -96,7 +96,77 @@ function AttendancePage() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isQRCodeOpen, setIsQRCodeOpen] = useState(false);
   const [isCheckInOpen, setIsCheckInOpen] = useState(false);
+  const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+  const [manualStaffId, setManualStaffId] = useState('');
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+
+  const handleManualAttendance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualStaffId.trim()) return;
+
+    try {
+      setIsSubmittingManual(true);
+      
+      // 1. Find staff by readable_id
+      const { data: staff, error: staffError } = await supabase
+        .from('staff_records')
+        .select('id, full_name, position')
+        .eq('readable_id', manualStaffId.trim().toUpperCase())
+        .single();
+
+      if (staffError || !staff) {
+        throw new Error('Staff record not found with ID: ' + manualStaffId);
+      }
+
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      
+      // 2. Check if already checked in today
+      const { data: existing } = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('staff_id', staff.id)
+        .eq('date', today)
+        .single();
+
+      if (existing) {
+        // Update check-out
+        const { error: updateError } = await supabase
+          .from('attendance')
+          .update({ 
+            check_out: now.toLocaleTimeString(),
+            status: 'present'
+          })
+          .eq('id', existing.id);
+
+        if (updateError) throw updateError;
+        toast.success(`Check-out recorded for ${staff.full_name}`);
+      } else {
+        // Insert check-in
+        const { error: insertError } = await supabase
+          .from('attendance')
+          .insert([{
+            staff_id: staff.id,
+            date: today,
+            check_in: now.toLocaleTimeString(),
+            status: now.getHours() > 9 ? 'late' : 'present',
+            method: 'manual'
+          }]);
+
+        if (insertError) throw insertError;
+        toast.success(`Check-in recorded for ${staff.full_name}`);
+      }
+
+      setManualStaffId('');
+      setIsManualEntryOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['attendance-records'] });
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmittingManual(false);
+    }
+  };
 
   const canScan = isSuperAdmin || isAdmin || isICT;
 
@@ -323,10 +393,42 @@ function AttendancePage() {
             </Dialog>
 
             {canScan && (
-              <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
+              <>
+                <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="gap-2 rounded-xl">
+                      <Search className="h-4 w-4" />
+                      Manual Entry
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md rounded-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Manual Attendance Entry</DialogTitle>
+                      <DialogDescription>Enter Staff ID or scan barcode manually.</DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleManualAttendance} className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Staff ID / Barcode</label>
+                        <Input 
+                          placeholder="e.g. GDU001" 
+                          value={manualStaffId}
+                          onChange={(e) => setManualStaffId(e.target.value)}
+                          className="text-lg font-mono uppercase"
+                          autoFocus
+                        />
+                      </div>
+                      <Button type="submit" className="w-full gap-2" disabled={isSubmittingManual}>
+                        {isSubmittingManual ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
+                        Mark Attendance
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={isScannerOpen} onOpenChange={setIsScannerOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2 rounded-xl shadow-lg shadow-primary/20">
-                    <Scan className="h-4 w-4" />
+                    <ScanQrCode className="h-4 w-4" />
                     Scan Attendance
                   </Button>
                 </DialogTrigger>
@@ -340,7 +442,8 @@ function AttendancePage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            )}
+            </>
+          )}
             <Button variant="outline" className="rounded-xl">
               <Download className="mr-2 h-4 w-4" />
               Export

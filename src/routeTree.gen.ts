@@ -17,6 +17,7 @@ import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports
 import { Route as DashboardProfileRouteImport } from './routes/dashboard/profile'
 import { Route as DashboardPayrollRouteImport } from './routes/dashboard/payroll'
 import { Route as DashboardOrganogramRouteImport } from './routes/dashboard/organogram'
+import { Route as DashboardNotificationsRouteImport } from './routes/dashboard/notifications'
 import { Route as DashboardNominalRollRouteImport } from './routes/dashboard/nominal-roll'
 import { Route as DashboardDocumentsRouteImport } from './routes/dashboard/documents'
 import { Route as DashboardDepartmentsRouteImport } from './routes/dashboard/departments'
@@ -72,6 +73,11 @@ const DashboardPayrollRoute = DashboardPayrollRouteImport.update({
 const DashboardOrganogramRoute = DashboardOrganogramRouteImport.update({
   id: '/dashboard/organogram',
   path: '/dashboard/organogram',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardNotificationsRoute = DashboardNotificationsRouteImport.update({
+  id: '/dashboard/notifications',
+  path: '/dashboard/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardNominalRollRoute = DashboardNominalRollRouteImport.update({
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/departments': typeof DashboardDepartmentsRoute
   '/dashboard/documents': typeof DashboardDocumentsRoute
   '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
+  '/dashboard/notifications': typeof DashboardNotificationsRoute
   '/dashboard/organogram': typeof DashboardOrganogramRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/dashboard/profile': typeof DashboardProfileRoute
@@ -196,6 +203,7 @@ export interface FileRoutesByTo {
   '/dashboard/departments': typeof DashboardDepartmentsRoute
   '/dashboard/documents': typeof DashboardDocumentsRoute
   '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
+  '/dashboard/notifications': typeof DashboardNotificationsRoute
   '/dashboard/organogram': typeof DashboardOrganogramRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/dashboard/profile': typeof DashboardProfileRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/dashboard/departments': typeof DashboardDepartmentsRoute
   '/dashboard/documents': typeof DashboardDocumentsRoute
   '/dashboard/nominal-roll': typeof DashboardNominalRollRoute
+  '/dashboard/notifications': typeof DashboardNotificationsRoute
   '/dashboard/organogram': typeof DashboardOrganogramRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/dashboard/profile': typeof DashboardProfileRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/dashboard/departments'
     | '/dashboard/documents'
     | '/dashboard/nominal-roll'
+    | '/dashboard/notifications'
     | '/dashboard/organogram'
     | '/dashboard/payroll'
     | '/dashboard/profile'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/dashboard/departments'
     | '/dashboard/documents'
     | '/dashboard/nominal-roll'
+    | '/dashboard/notifications'
     | '/dashboard/organogram'
     | '/dashboard/payroll'
     | '/dashboard/profile'
@@ -301,6 +312,7 @@ export interface FileRouteTypes {
     | '/dashboard/departments'
     | '/dashboard/documents'
     | '/dashboard/nominal-roll'
+    | '/dashboard/notifications'
     | '/dashboard/organogram'
     | '/dashboard/payroll'
     | '/dashboard/profile'
@@ -328,6 +340,7 @@ export interface RootRouteChildren {
   DashboardDepartmentsRoute: typeof DashboardDepartmentsRoute
   DashboardDocumentsRoute: typeof DashboardDocumentsRoute
   DashboardNominalRollRoute: typeof DashboardNominalRollRoute
+  DashboardNotificationsRoute: typeof DashboardNotificationsRoute
   DashboardOrganogramRoute: typeof DashboardOrganogramRoute
   DashboardPayrollRoute: typeof DashboardPayrollRoute
   DashboardProfileRoute: typeof DashboardProfileRoute
@@ -393,6 +406,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/organogram'
       fullPath: '/dashboard/organogram'
       preLoaderRoute: typeof DashboardOrganogramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/notifications': {
+      id: '/dashboard/notifications'
+      path: '/dashboard/notifications'
+      fullPath: '/dashboard/notifications'
+      preLoaderRoute: typeof DashboardNotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/nominal-roll': {
@@ -545,6 +565,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardDepartmentsRoute: DashboardDepartmentsRoute,
   DashboardDocumentsRoute: DashboardDocumentsRoute,
   DashboardNominalRollRoute: DashboardNominalRollRoute,
+  DashboardNotificationsRoute: DashboardNotificationsRoute,
   DashboardOrganogramRoute: DashboardOrganogramRoute,
   DashboardPayrollRoute: DashboardPayrollRoute,
   DashboardProfileRoute: DashboardProfileRoute,

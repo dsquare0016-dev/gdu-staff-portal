@@ -176,12 +176,14 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Outlet />
-          <Toaster richColors position="top-right" />
-        </TooltipProvider>
-      </AuthProvider>
+      <ThemeProvider defaultTheme="light" storageKey="gdu-portal-theme">
+        <AuthProvider>
+          <TooltipProvider>
+            <Outlet />
+            <Toaster richColors position="top-right" />
+          </TooltipProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
