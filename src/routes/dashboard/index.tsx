@@ -16,6 +16,7 @@ import {
   Activity,
   UserPlus,
   MessageSquare,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -76,8 +77,11 @@ const pendingApprovals = [
 ];
 
 function DashboardPage() {
-  const { profile, isSuperAdmin, isAdmin, isAccounts, isDirector, isStaff } = useAuth();
+  const { profile, isSuperAdmin, isAdmin, isAccounts, isDirector, isStaff, loading } = useAuth();
   const [mounted, setMounted] = useState(false);
+
+  // Safety check for isStaff
+  const userIsStaff = isStaff === true;
 
   useEffect(() => {
     setMounted(true);
@@ -93,7 +97,7 @@ function DashboardPage() {
       if (error) throw error;
       return { total: count || 0 };
     },
-    enabled: !isStaff,
+    enabled: !userIsStaff && !!profile,
   });
 
   const { data: attendanceStats } = useQuery({
@@ -108,7 +112,7 @@ function DashboardPage() {
       if (error) throw error;
       return { presentToday: count || 0 };
     },
-    enabled: !isStaff,
+    enabled: !userIsStaff && !!profile,
   });
 
   const { data: departmentStats } = useQuery({
@@ -121,7 +125,7 @@ function DashboardPage() {
       if (error) throw error;
       return { total: count || 0 };
     },
-    enabled: !isStaff,
+    enabled: !userIsStaff && !!profile,
   });
 
   // Staff Personal Stats
@@ -148,7 +152,7 @@ function DashboardPage() {
         lastCheckIn: records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.check_in
       };
     },
-    enabled: isStaff && !!profile?.id,
+    enabled: userIsStaff && !!profile?.id,
   });
 
   const formatCurrency = (value: number) => {
@@ -163,11 +167,14 @@ function DashboardPage() {
     }
   };
 
-  if (!mounted) {
+  if (!mounted || loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-[60vh]">
-          <p className="text-muted-foreground">Initializing dashboard...</p>
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-muted-foreground">Initializing dashboard...</p>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -185,7 +192,7 @@ function DashboardPage() {
             </h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2">
               <Activity className="h-4 w-4 text-primary" />
-              {isStaff ? "Here's your personal overview for today." : "Here's what's happening with GDU today."}
+              {userIsStaff ? "Here's your personal overview for today." : "Here's what's happening with GDU today."}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -193,7 +200,7 @@ function DashboardPage() {
               <Calendar className="mr-2 h-4 w-4" />
               {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </Button>
-            {!isStaff && (
+            {!userIsStaff && (
               <Button size="sm" className="shadow-lg shadow-primary/20">
                 <TrendingUp className="mr-2 h-4 w-4" />
                 Generate Report
@@ -203,7 +210,7 @@ function DashboardPage() {
         </div>
 
         {/* Global Admin Stats */}
-        {!isStaff && (
+        {!userIsStaff && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Total Staff"
@@ -236,7 +243,7 @@ function DashboardPage() {
         )}
 
         {/* Staff Personal Stats */}
-        {isStaff && (
+        {userIsStaff && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="My Attendance Rate"
@@ -266,7 +273,7 @@ function DashboardPage() {
           </div>
         )}
 
-        {!isStaff && (
+        {!userIsStaff && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <StatCard
               title="Pending Approvals"
@@ -292,7 +299,7 @@ function DashboardPage() {
           </div>
         )}
 
-        {!isStaff && (
+        {!userIsStaff && (
           <div className="grid gap-4 lg:grid-cols-2">
             <BarChartCard
               title="Weekly Attendance Overview"
@@ -313,13 +320,13 @@ function DashboardPage() {
           </div>
         )}
 
-        {!isStaff && (
+        {!userIsStaff && (
           <div className="grid gap-4 lg:grid-cols-3">
             <AreaChartCard
               title="Monthly Payroll Trend"
               description="Payroll expenditure over time"
               data={monthlyPayroll}
-              fill="var(--gold)"
+              areas={[{ dataKey: 'value', color: 'var(--gold)', name: 'Expenditure' }]}
               className="lg:col-span-2"
             />
 
@@ -359,7 +366,7 @@ function DashboardPage() {
         )}
 
         <div className="grid gap-4 lg:grid-cols-2">
-          {!isStaff && (
+          {!userIsStaff && (
             <Card className="border backdrop-blur-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-lg">Pending Approvals</CardTitle>
@@ -396,12 +403,12 @@ function DashboardPage() {
             </Card>
           )}
 
-          <Card className={cn("border backdrop-blur-sm", isStaff && "lg:col-span-2")}>
+          <Card className={cn("border backdrop-blur-sm", userIsStaff && "lg:col-span-2")}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={cn("grid gap-3", isStaff ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2")}>
+              <div className={cn("grid gap-3", userIsStaff ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2")}>
                 {(isAdmin || isSuperAdmin) && (
                   <>
                     <Button

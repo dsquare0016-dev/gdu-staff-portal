@@ -644,16 +644,20 @@ function AttendancePage() {
           </TabsContent>
 
           <TabsContent value="reports">
-            <Card className="border backdrop-blur-sm p-8 text-center">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold">Attendance Reports</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Generate and download attendance reports
-              </p>
-              <Button className="mt-4">
-                <Download className="mr-2 h-4 w-4" />
-                Generate Report
-              </Button>
+            <Card className="border backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle>Attendance Reports</CardTitle>
+                <CardDescription>
+                  Generate and download attendance reports
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center justify-center p-8 text-center">
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <Button>
+                  <Download className="mr-2 h-4 w-4" />
+                  Generate Report
+                </Button>
+              </CardContent>
             </Card>
           </TabsContent>
         </Tabs>

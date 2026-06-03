@@ -173,8 +173,8 @@ export function BarChartCard({ title, description, data, bars, className }: BarC
 interface AreaChartCardProps {
   title: string;
   description?: string;
-  data: { name: string; value: number }[];
-  fill?: string;
+  data: { name: string; [key: string]: string | number }[];
+  areas: { dataKey: string; color: string; name: string }[];
   className?: string;
 }
 
@@ -182,7 +182,7 @@ export function AreaChartCard({
   title,
   description,
   data,
-  fill = 'var(--primary)',
+  areas,
   className,
 }: AreaChartCardProps) {
   const [mounted, setMounted] = useState(false);
@@ -215,10 +215,12 @@ export function AreaChartCard({
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <defs>
-              <linearGradient id={`gradient-${title}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={fill} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={fill} stopOpacity={0} />
-              </linearGradient>
+              {areas.map((area) => (
+                <linearGradient key={`gradient-${area.dataKey}`} id={`gradient-${area.dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={area.color} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={area.color} stopOpacity={0} />
+                </linearGradient>
+              ))}
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
@@ -230,13 +232,18 @@ export function AreaChartCard({
                 borderRadius: '8px',
               }}
             />
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke={fill}
-              strokeWidth={2}
-              fill={`url(#gradient-${title})`}
-            />
+            <Legend />
+            {areas.map((area) => (
+              <Area
+                key={area.dataKey}
+                type="monotone"
+                dataKey={area.dataKey}
+                name={area.name}
+                stroke={area.color}
+                strokeWidth={2}
+                fill={`url(#gradient-${area.dataKey})`}
+              />
+            ))}
           </AreaChart>
         </ResponsiveContainer>
       </CardContent>

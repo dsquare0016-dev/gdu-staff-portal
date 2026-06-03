@@ -247,7 +247,7 @@ function ReportsPage() {
                 title="Payroll Trend"
                 description="Monthly payroll expenditure"
                 data={payrollTrend}
-                fill="hsl(var(--gold))"
+                areas={[{ dataKey: 'value', color: 'hsl(var(--gold))', name: 'Expenditure' }]}
               />
               <Card className="border backdrop-blur-sm">
                 <CardHeader>
@@ -318,7 +318,7 @@ function ReportsPage() {
                 title="New Staff Joined"
                 description="Monthly recruitment trend"
                 data={monthlyNewStaff}
-                fill="hsl(var(--primary))"
+                areas={[{ dataKey: 'value', color: 'hsl(var(--primary))', name: 'New Staff' }]}
               />
             </div>
             <Card className="border backdrop-blur-sm">
@@ -375,7 +375,7 @@ function ReportsPage() {
                 title="Monthly Payroll"
                 description="Payroll expenditure trend"
                 data={payrollTrend}
-                fill="hsl(var(--gold))"
+                areas={[{ dataKey: 'value', color: 'hsl(var(--gold))', name: 'Expenditure' }]}
               />
               <Card className="border backdrop-blur-sm">
                 <CardHeader>

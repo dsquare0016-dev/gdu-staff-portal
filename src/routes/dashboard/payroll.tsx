@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -374,11 +375,14 @@ function PayrollPage() {
 
           <TabsContent value="overview" className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              <AreaChartCard
+            <AreaChartCard
                 title="Revenue vs Expenditure"
                 description="Monthly financial trend"
                 data={financialTrend}
-                fill="var(--primary)"
+                areas={[
+                  { dataKey: 'income', color: 'var(--primary)', name: 'Income' },
+                  { dataKey: 'expenditure', color: '#dc2626', name: 'Expenditure' }
+                ]}
               />
               <BarChartCard
                 title="Expense Distribution"

@@ -118,6 +118,8 @@ function StaffManagementPage() {
 
   const [roleUpdateStaff, setRoleUpdateStaff] = useState<any>(null);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
+  const [selectedStaffDetails, setSelectedStaffDetails] = useState<any>(null);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
   const handleRoleUpdate = (staff: any, newRole: string) => {
     updateStaffRoleMutation.mutate({
@@ -425,19 +427,27 @@ function StaffManagementPage() {
                               <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild>
-                                  <Link to={`/dashboard/staff/${staff.id}`} className="cursor-pointer">
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    View Details
-                                  </Link>
+                                <DropdownMenuItem 
+                                  className="cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedStaffDetails(staff);
+                                    setIsDetailsDialogOpen(true);
+                                  }}
+                                >
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View Details
                                 </DropdownMenuItem>
                                 {canManageStaff && (
                                   <>
-                                    <DropdownMenuItem asChild>
-                                      <Link to={`/dashboard/staff/${staff.id}`} className="cursor-pointer">
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Edit Staff
-                                      </Link>
+                                    <DropdownMenuItem 
+                                      className="cursor-pointer"
+                                      onClick={() => {
+                                        setSelectedStaffDetails(staff);
+                                        setIsDetailsDialogOpen(true);
+                                      }}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Edit Staff
                                     </DropdownMenuItem>
                                     {isSuperAdmin && (
                                       <DropdownMenuItem 
@@ -547,6 +557,103 @@ function StaffManagementPage() {
             </div>
             <div className="flex justify-end">
               <Button variant="ghost" onClick={() => setIsRoleDialogOpen(false)}>Cancel</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Staff Details Dialog */}
+        <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Staff Profile — {selectedStaffDetails?.full_name}</DialogTitle>
+              <DialogDescription>
+                Detailed information for staff record #{selectedStaffDetails?.id.slice(0, 8)}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedStaffDetails && (
+              <div className="space-y-6 py-4">
+                <div className="flex flex-col md:flex-row gap-6 items-start">
+                  <Avatar className="h-32 w-32 border-4 border-muted shadow-xl">
+                    <AvatarImage src={selectedStaffDetails.passport_url} />
+                    <AvatarFallback className="text-4xl bg-primary text-primary-foreground">
+                      {selectedStaffDetails.full_name.split(' ').map((n: any) => n[0]).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 space-y-1">
+                    <h2 className="text-2xl font-bold">{selectedStaffDetails.full_name}</h2>
+                    <p className="text-muted-foreground flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      {selectedStaffDetails.email}
+                    </p>
+                    <p className="text-muted-foreground flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      {selectedStaffDetails.phone || 'No phone recorded'}
+                    </p>
+                    <div className="flex gap-2 pt-2">
+                      <Badge variant={getRoleBadgeVariant(selectedStaffDetails.role)}>
+                        {selectedStaffDetails.role.toUpperCase()}
+                      </Badge>
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                        {selectedStaffDetails.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-primary">Employment Information</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Department:</span>
+                        <span className="font-medium">{selectedStaffDetails.department?.name || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Rank/Position:</span>
+                        <span className="font-medium">{selectedStaffDetails.position || selectedStaffDetails.rank || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Grade Level:</span>
+                        <span className="font-medium">Level {selectedStaffDetails.grade_level}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Step:</span>
+                        <span className="font-medium">Step {selectedStaffDetails.step}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Employment Date:</span>
+                        <span className="font-medium">{formatDate(selectedStaffDetails.employment_date)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-sm uppercase tracking-wider text-primary">Personal Details</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Gender:</span>
+                        <span className="font-medium capitalize">{selectedStaffDetails.gender || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">State of Origin:</span>
+                        <span className="font-medium">{selectedStaffDetails.state || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Qualification:</span>
+                        <span className="font-medium">{selectedStaffDetails.qualification || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-muted-foreground">Retirement Date:</span>
+                        <span className="font-medium">{formatDate(selectedStaffDetails.retirement_date)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end pt-4 border-t">
+              <Button onClick={() => setIsDetailsDialogOpen(false)}>Close</Button>
             </div>
           </DialogContent>
         </Dialog>
