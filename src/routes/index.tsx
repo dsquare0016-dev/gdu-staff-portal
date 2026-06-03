@@ -26,8 +26,13 @@ import { useQuery } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async ({ context }) => {
-    // TanStack Start server-side check (if cookies were used)
-    // For now, we rely on the component-level redirect for demo purposes
+    // If we're on the client, we can check for the demo profile in sessionStorage
+    if (typeof window !== 'undefined') {
+      const savedDemoProfile = sessionStorage.getItem('gdu_demo_profile');
+      if (savedDemoProfile) {
+        throw redirect({ to: '/dashboard' });
+      }
+    }
   },
   head: () => ({
     meta: [
@@ -57,10 +62,9 @@ function LoginPage() {
   const { profile, loading: authLoading, signIn } = useAuth();
   const navigate = useNavigate();
 
-  // If already logged in, redirect to dashboard
+  // Redirect if profile is available (handled by useAuth's initial session check)
   useEffect(() => {
     if (!authLoading && profile) {
-      console.log("User authenticated, redirecting to dashboard...");
       navigate({ to: "/dashboard" });
     }
   }, [profile, authLoading, navigate]);
@@ -88,13 +92,6 @@ function LoginPage() {
       return data;
     },
   });
-
-  // If already logged in, redirect to dashboard
-  useEffect(() => {
-    if (profile) {
-      navigate({ to: "/dashboard" });
-    }
-  }, [profile, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

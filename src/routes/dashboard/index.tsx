@@ -31,6 +31,10 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export const Route = createFileRoute('/dashboard/')({
+  beforeLoad: async ({ context }) => {
+    // If no profile, we should redirect to login
+    // But we handle this in DashboardLayout for now
+  },
   head: () => ({
     meta: [{ title: 'Dashboard — GDU Portal' }],
   }),
