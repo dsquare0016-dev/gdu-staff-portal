@@ -396,7 +396,7 @@ function DashboardPage() {
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <p className="text-muted-foreground">Initializing dashboard...</p>
           </div>
-        </div>
+      </div>
 
       {/* Birthday Celebration Popup */}
       <Dialog open={showBirthdayPopup} onOpenChange={(open) => {
