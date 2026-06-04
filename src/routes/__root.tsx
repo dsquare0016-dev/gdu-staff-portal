@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/hooks/use-auth";
+import { NotificationProvider } from "@/lib/providers/notification-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -178,10 +179,12 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="gdu-portal-theme">
         <AuthProvider>
-          <TooltipProvider>
-            <Outlet />
-            <Toaster richColors position="top-right" />
-          </TooltipProvider>
+          <NotificationProvider>
+            <TooltipProvider>
+              <Outlet />
+              <Toaster richColors position="top-right" />
+            </TooltipProvider>
+          </NotificationProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

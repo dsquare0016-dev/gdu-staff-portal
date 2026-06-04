@@ -138,7 +138,7 @@ function AttendancePage() {
         const { error: updateError } = await supabase
           .from('attendance')
           .update({ 
-            check_out: now.toLocaleTimeString(),
+            check_out: now.toISOString(),
             status: 'present'
           })
           .eq('id', existing.id);
@@ -152,8 +152,8 @@ function AttendancePage() {
           .insert([{
             staff_id: staff.id,
             date: today,
-            check_in: now.toLocaleTimeString(),
-            status: now.getHours() > 9 ? 'late' : 'present',
+            check_in: now.toISOString(),
+            status: now.getHours() >= 9 && now.getMinutes() > 0 ? 'late' : 'present',
             method: 'manual'
           }]);
 
@@ -896,6 +896,7 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
           method: method,
           check_in: attendanceStatus === 'present' ? new Date().toISOString() : null,
           verified: false, // Needs admin verification as per requirement
+          approved: false,
         }]);
 
       if (error) throw error;

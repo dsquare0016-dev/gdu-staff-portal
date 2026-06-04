@@ -126,10 +126,10 @@ function ChatPage() {
     queryKey: ['chat-users'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('staff_records')
+        .from('profiles')
         .select('*')
         .neq('id', profile?.id)
-        .eq('status', 'active');
+        .eq('is_active', true);
       if (error) {
         handleDatabaseError(error, 'fetch chat users');
         return [];
@@ -475,15 +475,15 @@ function ChatPage() {
                   >
                     <div className="relative">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={user.passport_url} />
+                        <AvatarImage src={user.avatar_url} />
                         <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground">
-                          {user.full_name.charAt(0)}
+                          {user.full_name?.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       <div
                         className={cn(
                           'absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background',
-                          getStatusColor(user.status)
+                          getStatusColor(user.is_active ? 'active' : 'inactive')
                         )}
                       />
                     </div>
@@ -530,9 +530,9 @@ function ChatPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={selectedUser?.passport_url} />
+                      <AvatarImage src={selectedUser?.avatar_url} />
                       <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground">
-                        {selectedUser?.full_name.charAt(0) || 'U'}
+                        {selectedUser?.full_name?.charAt(0) || 'U'}
                       </AvatarFallback>
                     </Avatar>
                     <div>
@@ -574,9 +574,9 @@ function ChatPage() {
                         >
                           {!isMe && (
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={selectedUser?.passport_url} />
+                              <AvatarImage src={selectedUser?.avatar_url} />
                               <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs">
-                                {selectedUser?.full_name.charAt(0) || 'U'}
+                                {selectedUser?.full_name?.charAt(0) || 'U'}
                               </AvatarFallback>
                             </Avatar>
                           )}

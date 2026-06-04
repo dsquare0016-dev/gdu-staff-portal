@@ -96,11 +96,13 @@ function AllowancesPage() {
 
   const [formData, setFormData] = useState({
     staff_id: '',
-    title: '',
-    description: '',
+    allowance_type: '',
     amount: '',
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+    payment_status: 'pending' as const,
     payment_date: new Date().toISOString().split('T')[0],
-    status: 'pending' as const,
+    notes: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,6 +112,8 @@ function AllowancesPage() {
       await createAllowanceMutation.mutateAsync({
         ...formData,
         amount: parseFloat(formData.amount),
+        month: parseInt(formData.month.toString()),
+        year: parseInt(formData.year.toString()),
       });
     } catch (error: any) {
       // Handled by mutation onError
@@ -166,8 +170,35 @@ function AllowancesPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Allowance Title</Label>
-                    <Input required value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="e.g. Travel Allowance" />
+                    <Label>Allowance Type</Label>
+                    <Select onValueChange={(v) => setFormData({ ...formData, allowance_type: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Housing">Housing</SelectItem>
+                        <SelectItem value="Transport">Transport</SelectItem>
+                        <SelectItem value="Medical">Medical</SelectItem>
+                        <SelectItem value="Wardrobe">Wardrobe</SelectItem>
+                        <SelectItem value="Leave">Leave</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Month</Label>
+                      <Select defaultValue={formData.month.toString()} onValueChange={(v) => setFormData({ ...formData, month: parseInt(v) })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                            <SelectItem key={m} value={m.toString()}>{format(new Date(2024, m-1), 'MMMM')}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Year</Label>
+                      <Input type="number" value={formData.year} onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })} />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Amount (₦)</Label>
@@ -178,8 +209,8 @@ function AllowancesPage() {
                     <Input required type="date" value={formData.payment_date} onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Description (Optional)</Label>
-                    <Input value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Additional details..." />
+                    <Label>Notes (Optional)</Label>
+                    <Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Additional details..." />
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -212,7 +243,7 @@ function AllowancesPage() {
                           <Wallet className="h-6 w-6 text-primary" />
                         </div>
                         <div>
-                          <h3 className="font-bold text-slate-900">{item.title}</h3>
+                          <h3 className="font-bold text-slate-900">{item.allowance_type}</h3>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span className="font-mono font-bold text-primary">{item.staff_records?.readable_id}</span>
                             <span>•</span>
@@ -232,9 +263,9 @@ function AllowancesPage() {
                         </div>
                         <Badge className={cn(
                           "uppercase text-[10px] font-black px-3 py-1",
-                          item.status === 'paid' ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
+                          item.payment_status === 'paid' ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
                         )}>
-                          {item.status}
+                          {item.payment_status}
                         </Badge>
                       </div>
                     </div>

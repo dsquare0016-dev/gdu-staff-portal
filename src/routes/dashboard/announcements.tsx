@@ -8,6 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
 import {
   Select,
   SelectContent,
@@ -64,7 +68,7 @@ function AnnouncementsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('announcements')
-        .select('*, author:profiles(full_name, avatar_url)')
+        .select('*, posted_by_profile:profiles!announcements_posted_by_fkey(full_name, avatar_url)')
         .order('is_pinned', { descending: true })
         .order('created_at', { descending: true });
       if (error) throw error;
@@ -227,10 +231,10 @@ function AnnouncementsPage() {
                         <span className="flex items-center gap-1">
                           <Avatar className="h-4 w-4">
                             <AvatarFallback className="text-[8px]">
-                              {(announcement.author?.full_name || 'S').charAt(0)}
+                              {(announcement.posted_by_profile?.full_name || 'S').charAt(0)}
                             </AvatarFallback>
                           </Avatar>
-                          {announcement.author?.full_name || 'System'}
+                          {announcement.posted_by_profile?.full_name || 'System'}
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />

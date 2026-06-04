@@ -56,36 +56,8 @@ export function useNotifications() {
     enabled: !!user,
   });
 
-  // Realtime subscription
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`notifications:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newNotif = payload.new as Notification;
-          queryClient.setQueryData(['notifications', user.id], (old: Notification[] = []) => [newNotif, ...old]);
-          
-          // Show toast for new notification
-          toast(newNotif.title, {
-            description: newNotif.body,
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, queryClient]);
+  // Realtime subscription is now handled globally by NotificationProvider
+  // to avoid duplicate subscriptions and conflicts.
 
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {

@@ -206,7 +206,7 @@ function DashboardPage() {
     queryFn: async () => {
       const [leaves, allowances, docs] = await Promise.all([
         supabase.from('leave_requests').select('id, staff:staff_records(full_name), created_at').eq('status', 'pending').limit(5),
-        supabase.from('monthly_allowance_requests' as any).select('id, staff:staff_records(full_name), created_at').eq('status', 'Processing').limit(5),
+        supabase.from('monthly_allowance_requests').select('id, staff:staff_records(full_name), created_at').eq('status', 'Processing').limit(5),
         supabase.from('documents').select('id, name, staff:staff_records(full_name), created_at').eq('status', 'pending').limit(5)
       ]);
 
@@ -256,19 +256,19 @@ function DashboardPage() {
 
   // Fetch personal allowances for staff
   const { data: myAllowances = [] } = useQuery({
-    queryKey: ['my-allowances', profile?.id],
+    queryKey: ['my-allowances', profile?.staff_id],
     queryFn: async () => {
-      if (!profile?.id) return [];
+      if (!profile?.staff_id) return [];
       const { data, error } = await supabase
         .from('allowances')
         .select('*')
-        .eq('staff_id', profile.id)
+        .eq('staff_id', profile.staff_id)
         .order('payment_date', { descending: true })
         .limit(3);
       if (error) throw error;
       return data;
     },
-    enabled: userIsStaff && !!profile?.id,
+    enabled: userIsStaff && !!profile?.staff_id,
   });
 
   // Admin/Global Stats
@@ -307,7 +307,7 @@ function DashboardPage() {
     queryKey: ['dashboard-allowance-stats'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('monthly_allowance_requests' as any)
+        .from('monthly_allowance_requests')
         .select('status');
       
       if (error) throw error;
@@ -335,14 +335,14 @@ function DashboardPage() {
 
   // Staff Personal Stats
   const { data: personalStats } = useQuery({
-    queryKey: ['dashboard-personal-stats', profile?.id],
+    queryKey: ['dashboard-personal-stats', profile?.staff_id],
     queryFn: async () => {
-      if (!profile?.id) return null;
+      if (!profile?.staff_id) return null;
       
       const { data: records, error } = await supabase
         .from('attendance')
         .select('*')
-        .eq('staff_id', profile.id)
+        .eq('staff_id', profile.staff_id)
         .eq('approved', true);
       
       if (error) throw error;
@@ -531,7 +531,7 @@ function DashboardPage() {
                               <DollarSign className="h-4 w-4 text-primary" />
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-slate-900">{item.title}</p>
+                              <p className="text-sm font-bold text-slate-900">{item.allowance_type}</p>
                               <p className="text-[10px] text-muted-foreground uppercase">{new Date(item.payment_date).toLocaleDateString()}</p>
                             </div>
                           </div>
