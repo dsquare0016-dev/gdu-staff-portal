@@ -17,9 +17,9 @@ export default defineConfig({
   },
   vite: {
     server: {
-      port: 3000,
+      port: 5173,
       strictPort: false,
-      host: true,
+      host: 'localhost',
     },
   },
 });
