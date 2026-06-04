@@ -49,6 +49,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 
+import { PortalLoader } from '@/components/ui/portal-loader';
+
 export const Route = createFileRoute('/dashboard/organogram')({
   head: () => ({
     meta: [{ title: 'Organogram — GDU Portal' }],
@@ -234,7 +236,7 @@ function OrganogramPage() {
     return (
       <DashboardLayout>
         <div className="flex h-[60vh] items-center justify-center">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <PortalLoader message="Loading hierarchy..." />
         </div>
       </DashboardLayout>
     );

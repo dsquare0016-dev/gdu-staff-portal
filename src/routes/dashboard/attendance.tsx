@@ -76,6 +76,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
+import { PortalLoader } from '@/components/ui/portal-loader';
 
 export const Route = createFileRoute('/dashboard/attendance')({
   head: () => ({
@@ -593,8 +594,7 @@ function AttendancePage() {
               <CardContent>
                 {isLoading ? (
                   <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
-                    <p className="text-muted-foreground">Loading attendance records...</p>
+                    <PortalLoader message="Loading records..." size="sm" />
                   </div>
                 ) : (
                   <Table>

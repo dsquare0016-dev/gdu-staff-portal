@@ -13,6 +13,8 @@ import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/use-auth';
 
+import { PortalLoader } from '@/components/ui/portal-loader';
+
 export const Route = createFileRoute('/dashboard/settings/login-page')({
   component: LoginPageSettings,
 });
@@ -88,7 +90,7 @@ function LoginPageSettings() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <PortalLoader size="sm" />
       </div>
     );
   }
