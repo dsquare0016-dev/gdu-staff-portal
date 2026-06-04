@@ -396,43 +396,10 @@ function DashboardPage() {
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <p className="text-muted-foreground">Initializing dashboard...</p>
           </div>
-      </div>
-
-      {/* Birthday Celebration Popup */}
-      <Dialog open={showBirthdayPopup} onOpenChange={(open) => {
-        setShowBirthdayPopup(open);
-        if (!open && birthdayNotifId) {
-          markAsRead.mutate(birthdayNotifId);
-        }
-      }}>
-        <DialogContent className="sm:max-w-md bg-gradient-to-br from-pink-50 via-white to-purple-50 border-pink-200">
-          <DialogHeader className="flex flex-col items-center gap-4">
-            <div className="h-20 w-20 rounded-full bg-pink-100 flex items-center justify-center text-4xl animate-bounce">
-              🎂
-            </div>
-            <DialogTitle className="text-2xl font-black text-pink-600 tracking-tight text-center">
-              Happy Birthday, {profile?.full_name?.split(' ')[0]}!
-            </DialogTitle>
-            <DialogDescription className="text-center text-slate-600 font-medium leading-relaxed">
-              “Wishing you good health, success, and happiness on your special day and always. Thank you for your contributions to the GDU team!”
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex sm:justify-center mt-4">
-            <Button 
-              onClick={() => {
-                setShowBirthdayPopup(false);
-                if (birthdayNotifId) markAsRead.mutate(birthdayNotifId);
-              }}
-              className="bg-pink-500 hover:bg-pink-600 text-white rounded-full px-8 shadow-lg shadow-pink-200"
-            >
-              Thank You!
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </DashboardLayout>
-  );
-}
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const attendanceRate = staffStats?.total ? Math.round((attendanceStats?.presentToday || 0) / staffStats.total * 100) : 0;
 
@@ -834,6 +801,39 @@ function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Birthday Celebration Popup */}
+      <Dialog open={showBirthdayPopup} onOpenChange={(open) => {
+        setShowBirthdayPopup(open);
+        if (!open && birthdayNotifId) {
+          markAsRead.mutate(birthdayNotifId);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md bg-gradient-to-br from-pink-50 via-white to-purple-50 border-pink-200">
+          <DialogHeader className="flex flex-col items-center gap-4">
+            <div className="h-20 w-20 rounded-full bg-pink-100 flex items-center justify-center text-4xl animate-bounce">
+              🎂
+            </div>
+            <DialogTitle className="text-2xl font-black text-pink-600 tracking-tight text-center">
+              Happy Birthday, {profile?.full_name?.split(' ')[0]}!
+            </DialogTitle>
+            <DialogDescription className="text-center text-slate-600 font-medium leading-relaxed">
+              “Wishing you good health, success, and happiness on your special day and always. Thank you for your contributions to the GDU team!”
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex sm:justify-center mt-4">
+            <Button 
+              onClick={() => {
+                setShowBirthdayPopup(false);
+                if (birthdayNotifId) markAsRead.mutate(birthdayNotifId);
+              }}
+              className="bg-pink-500 hover:bg-pink-600 text-white rounded-full px-8 shadow-lg shadow-pink-200"
+            >
+              Thank You!
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

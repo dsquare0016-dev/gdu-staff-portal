@@ -237,6 +237,8 @@ export async function createNotification(params: {
   body: string;
   link?: string;
   metadata?: any;
+  related_module?: string;
+  related_record_id?: string;
 }) {
   const { error } = await supabase.from('notifications').insert({
     user_id: params.user_id,
@@ -245,6 +247,8 @@ export async function createNotification(params: {
     body: params.body,
     link: params.link,
     metadata: params.metadata,
+    related_module: params.related_module,
+    related_record_id: params.related_record_id,
     status: 'unread'
   });
 
