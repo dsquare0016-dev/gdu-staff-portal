@@ -19,24 +19,13 @@ import {
   Search
 } from 'lucide-react';
 import { useState } from 'react';
+import { useNotifications, type NotificationType } from '@/lib/hooks/use-notifications';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 
 export const Route = createFileRoute('/dashboard/notifications')({
-  head: () => ({
-    meta: [{ title: 'Notifications — GDU Portal' }],
-  }),
-  component: NotificationsPage,
-});
-
-import { useNotifications, NotificationType } from '@/lib/hooks/use-notifications';
-import { Loader2 } from 'lucide-react';
-
-export const Route = createFileRoute('/dashboard/notifications')({
-  head: () => ({
-    meta: [{ title: 'Notifications — GDU Portal' }],
-  }),
   component: NotificationsPage,
 });
 

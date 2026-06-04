@@ -2,7 +2,7 @@ import { useMonthlyAllowance } from '@/lib/hooks/use-monthly-allowance';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, Calendar, Percent, Send, CheckCircle2, XCircle, Clock, CreditCard } from 'lucide-react';
+import { Wallet, Calendar, Percent, Send, CheckCircle2, XCircle, Clock, CreditCard, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 

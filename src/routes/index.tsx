@@ -26,13 +26,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async ({ context }) => {
-    // If we're on the client, we can check for the demo profile in sessionStorage
-    if (typeof window !== 'undefined') {
-      const savedDemoProfile = sessionStorage.getItem('gdu_demo_profile');
-      if (savedDemoProfile) {
-        throw redirect({ to: '/dashboard' });
-      }
-    }
+    // Demo redirect logic removed to ensure only database-driven auth is used
   },
   head: () => ({
     meta: [

@@ -30,9 +30,12 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { handleDatabaseError } from '@/lib/error-handler';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { startOfWeek, endOfWeek, eachDayOfInterval, format, subMonths } from 'date-fns';
 
 import { useNotifications } from '@/lib/hooks/use-notifications';
 import { 
@@ -496,7 +499,7 @@ function DashboardPage() {
                 />
                 <StatCard
                   title="Last Check-in"
-                  value={personalStats?.lastCheckIn ? new Date(personalStats.lastCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'None'}
+                  value={personalStats?.lastCheckIn ? (personalStats.lastCheckIn.includes(':') ? personalStats.lastCheckIn.split(':').slice(0, 2).join(':') : new Date(personalStats.lastCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'None'}
                   icon={Clock}
                   description="Today's status"
                 />

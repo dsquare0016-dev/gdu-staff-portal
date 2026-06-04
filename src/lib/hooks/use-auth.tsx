@@ -225,6 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         isSuperAdmin,
         isICT,
+        isTA,
         isAdmin,
         isAccounts,
         isDirector,
