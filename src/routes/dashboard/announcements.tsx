@@ -55,78 +55,57 @@ export const Route = createFileRoute('/dashboard/announcements')({
   component: AnnouncementsPage,
 });
 
-const mockAnnouncements = [
-  {
-    id: '1',
-    title: 'Public Holiday Notice - Democracy Day',
-    body: 'The office will be closed on Monday, June 12th, 2026 to commemorate Democracy Day. All staff are advised to plan accordingly.',
-    audience: 'all',
-    posted_by: 'David Adeyemi',
-    posted_at: '2026-05-28 09:00 AM',
-    is_pinned: true,
-    expires_at: '2026-06-12',
-    views: 156,
-  },
-  {
-    id: '2',
-    title: 'New Attendance Policy Implementation',
-    body: 'Starting from June 1st, 2026, all staff must use the digital attendance system. Manual sign-in sheets will no longer be accepted. Please ensure your biometrics are registered with ICT.',
-    audience: 'all',
-    posted_by: 'Chidi Okafor',
-    posted_at: '2026-05-25 10:30 AM',
-    is_pinned: false,
-    expires_at: '2026-06-01',
-    views: 142,
-  },
-  {
-    id: '3',
-    title: 'May 2026 Payroll Processing Complete',
-    body: 'Salary payments for May 2026 have been processed. Staff who have not received their payments should contact the Finance department.',
-    audience: 'all',
-    posted_by: 'Grace Okonkwo',
-    posted_at: '2026-05-26 02:00 PM',
-    is_pinned: false,
-    expires_at: null,
-    views: 156,
-  },
-  {
-    id: '4',
-    title: 'Training Workshop on Digital Skills',
-    body: 'A mandatory training workshop on digital skills will hold from June 15-17, 2026. All staff are required to attend. Registration closes June 10th.',
-    audience: 'admin',
-    posted_by: 'Emmanuel Obi',
-    posted_at: '2026-05-24 11:00 AM',
-    is_pinned: false,
-    expires_at: '2026-06-10',
-    views: 35,
-  },
-  {
-    id: '5',
-    title: 'Quarterly Performance Review Schedule',
-    body: 'The Q2 2026 performance review will commence on July 1st. Heads of Department should submit their staff evaluation reports by June 25th.',
-    audience: 'admin',
-    posted_by: 'David Adeyemi',
-    posted_at: '2026-05-22 09:00 AM',
-    is_pinned: false,
-    expires_at: '2026-06-25',
-    views: 28,
-  },
-];
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
+
+export const Route = createFileRoute('/dashboard/announcements')({
+  head: () => ({
+    meta: [{ title: 'Announcements — GDU Portal' }],
+  }),
+  component: AnnouncementsPage,
+});
 
 function AnnouncementsPage() {
-  const { canAccess } = useAuth();
+  const { canAccess, profile } = useAuth();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
+  const { data: announcements = [], isLoading } = useQuery({
+    queryKey: ['announcements'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*, author:profiles(full_name, avatar_url)')
+        .order('is_pinned', { descending: true })
+        .order('created_at', { descending: true });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+      toast.success('Announcement deleted');
+    },
+  });
+
   const canManageAnnouncements = canAccess('announcements', 'create') || canAccess('announcements', 'edit');
 
-  const filteredAnnouncements = mockAnnouncements.filter(
+  const filteredAnnouncements = announcements.filter(
     (ann) =>
       ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ann.body.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const pinnedCount = mockAnnouncements.filter((a) => a.is_pinned).length;
+  const pinnedCount = announcements.filter((a) => a.is_pinned).length;
 
   return (
     <DashboardLayout>
@@ -165,7 +144,7 @@ function AnnouncementsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Announcements</p>
-                  <p className="text-2xl font-bold">{mockAnnouncements.length}</p>
+                  <p className="text-2xl font-bold">{announcements.length}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
                   <Megaphone className="h-5 w-5 text-primary" />
@@ -190,11 +169,11 @@ function AnnouncementsPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Views</p>
-                  <p className="text-2xl font-bold">{mockAnnouncements.reduce((sum, a) => sum + a.views, 0)}</p>
+                  <p className="text-sm text-muted-foreground">Recent</p>
+                  <p className="text-2xl font-bold">{announcements.filter(a => new Date(a.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-blue-500" />
+                  <Clock className="h-5 w-5 text-blue-500" />
                 </div>
               </div>
             </CardContent>
@@ -220,7 +199,11 @@ function AnnouncementsPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {filteredAnnouncements.map((announcement) => (
+            {isLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary h-10 w-10" /></div>
+            ) : filteredAnnouncements.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground">No announcements found.</div>
+            ) : filteredAnnouncements.map((announcement) => (
               <div
                 key={announcement.id}
                 className={cn(
@@ -258,20 +241,19 @@ function AnnouncementsPage() {
                         <span className="flex items-center gap-1">
                           <Avatar className="h-4 w-4">
                             <AvatarFallback className="text-[8px]">
-                              {announcement.posted_by.charAt(0)}
+                              {(announcement.author?.full_name || 'S').charAt(0)}
                             </AvatarFallback>
                           </Avatar>
-                          {announcement.posted_by}
+                          {announcement.author?.full_name || 'System'}
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {announcement.posted_at}
+                          {format(new Date(announcement.created_at), 'PPP')}
                         </span>
                         <span className="flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           {announcement.audience === 'all' ? 'All Staff' : announcement.audience}
                         </span>
-                        <span>{announcement.views} views</span>
                       </div>
                     </div>
                   </div>
@@ -294,7 +276,14 @@ function AnnouncementsPage() {
                           {announcement.is_pinned ? 'Unpin' : 'Pin'}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer">
+                        <DropdownMenuItem 
+                          className="text-destructive focus:text-destructive cursor-pointer"
+                          onClick={() => {
+                            if (confirm('Delete this announcement?')) {
+                              deleteMutation.mutate(announcement.id);
+                            }
+                          }}
+                        >
                           <Trash2 className="mr-2 h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
@@ -312,20 +301,58 @@ function AnnouncementsPage() {
 }
 
 function AnnouncementForm({ onSuccess }: { onSuccess: () => void }) {
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState({
+    title: '',
+    body: '',
+    audience: 'all',
+    is_pinned: false,
+    expires_at: '',
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (data: any) => {
+      const { error } = await supabase.from('announcements').insert({
+        ...data,
+        posted_by: profile?.id,
+        expires_at: data.expires_at || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
+      toast.success('Announcement published');
+      onSuccess();
+    },
+  });
+
   return (
     <div className="grid gap-4 py-4">
       <div className="space-y-2">
         <label className="text-sm font-medium">Title</label>
-        <Input placeholder="Enter announcement title" />
+        <Input 
+          placeholder="Enter announcement title" 
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+        />
       </div>
       <div className="space-y-2">
         <label className="text-sm font-medium">Content</label>
-        <Textarea placeholder="Enter announcement content" rows={4} />
+        <Textarea 
+          placeholder="Enter announcement content" 
+          rows={4} 
+          value={formData.body}
+          onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Audience</label>
-          <Select defaultValue="all">
+          <Select 
+            value={formData.audience}
+            onValueChange={(val) => setFormData({ ...formData, audience: val })}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -339,18 +366,31 @@ function AnnouncementForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Expires On</label>
-          <Input type="date" />
+          <Input 
+            type="date" 
+            value={formData.expires_at}
+            onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
+          />
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <input type="checkbox" id="pin" className="rounded" />
+        <input 
+          type="checkbox" 
+          id="pin" 
+          className="rounded" 
+          checked={formData.is_pinned}
+          onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })}
+        />
         <label htmlFor="pin" className="text-sm font-medium">Pin this announcement</label>
       </div>
       <div className="flex justify-end gap-3 mt-4">
         <Button variant="outline" onClick={onSuccess}>
           Cancel
         </Button>
-        <Button>Publish</Button>
+        <Button onClick={() => mutation.mutate(formData)} disabled={mutation.isPending}>
+          {mutation.isPending ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+          Publish
+        </Button>
       </div>
     </div>
   );

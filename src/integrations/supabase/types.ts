@@ -729,7 +729,11 @@ export type Database = {
           is_read: boolean
           link: string | null
           metadata: Json | null
+          status: string
+          related_module: string | null
+          related_record_id: string | null
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
@@ -740,7 +744,11 @@ export type Database = {
           is_read?: boolean
           link?: string | null
           metadata?: Json | null
+          status?: string
+          related_module?: string | null
+          related_record_id?: string | null
           created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
@@ -751,7 +759,46 @@ export type Database = {
           is_read?: boolean
           link?: string | null
           metadata?: Json | null
+          status?: string
+          related_module?: string | null
+          related_record_id?: string | null
           created_at?: string
+          updated_at?: string
+        }
+      }
+      notification_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          attendance_alerts: boolean
+          birthday_alerts: boolean
+          retirement_alerts: boolean
+          allowance_alerts: boolean
+          system_alerts: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          attendance_alerts?: boolean
+          birthday_alerts?: boolean
+          retirement_alerts?: boolean
+          allowance_alerts?: boolean
+          system_alerts?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          attendance_alerts?: boolean
+          birthday_alerts?: boolean
+          retirement_alerts?: boolean
+          allowance_alerts?: boolean
+          system_alerts?: boolean
+          created_at?: string
+          updated_at?: string
         }
       }
       announcements: {
@@ -803,6 +850,9 @@ export type Database = {
           new_data: Json | null
           ip_address: string | null
           user_agent: string | null
+          module: string | null
+          description: string | null
+          related_record_id: string | null
           created_at: string
         }
         Insert: {
@@ -815,6 +865,9 @@ export type Database = {
           new_data?: Json | null
           ip_address?: string | null
           user_agent?: string | null
+          module?: string | null
+          description?: string | null
+          related_record_id?: string | null
           created_at?: string
         }
         Update: {
@@ -827,6 +880,9 @@ export type Database = {
           new_data?: Json | null
           ip_address?: string | null
           user_agent?: string | null
+          module?: string | null
+          description?: string | null
+          related_record_id?: string | null
           created_at?: string
         }
       }

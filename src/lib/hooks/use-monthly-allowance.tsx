@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './use-auth';
+import { createNotification } from './use-notifications';
 import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 
@@ -137,12 +138,50 @@ export function useMonthlyAllowance() {
       if (status === 'Paid') updates.paid_at = new Date().toISOString();
       if (reason) updates.rejection_reason = reason;
 
+      const { data: request, error: fetchError } = await supabase
+        .from('monthly_allowance_requests')
+        .select('staff:staff_records(user_id), month, year')
+        .eq('id', requestId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
       const { error } = await supabase
         .from('monthly_allowance_requests')
         .update(updates)
         .eq('id', requestId);
 
       if (error) throw error;
+
+      // Create notification for staff
+      const staffUserId = (request.staff as any)?.user_id;
+      if (staffUserId) {
+        let title = '';
+        let body = '';
+        const monthName = format(new Date(request.year, request.month - 1), 'MMMM');
+
+        if (status === 'Approved') {
+          title = 'Allowance Approved';
+          body = `Your monthly allowance request for ${monthName} ${request.year} has been approved.`;
+        } else if (status === 'Paid') {
+          title = 'Allowance Paid';
+          body = `Your monthly allowance for ${monthName} ${request.year} has been paid into your account.`;
+        } else if (status === 'Rejected') {
+          title = 'Allowance Rejected';
+          body = `Your monthly allowance request for ${monthName} ${request.year} was not approved. Reason: ${reason || 'Not specified'}`;
+        }
+
+        if (title) {
+          await createNotification({
+            user_id: staffUserId,
+            type: 'payment',
+            title,
+            body,
+            related_module: 'allowance',
+            related_record_id: requestId
+          } as any);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-monthly-allowance-requests'] });

@@ -77,6 +77,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 import { PortalLoader } from '@/components/ui/portal-loader';
+import { createNotification } from '@/lib/hooks/use-notifications';
 
 export const Route = createFileRoute('/dashboard/attendance')({
   head: () => ({
@@ -246,7 +247,7 @@ function AttendancePage() {
     },
   });
 
-  const handleVerify = (record: any) => {
+  const handleVerify = async (record: any) => {
     // Skip verification/approval requirement for TA, DG, ICT
     const skipApprovalRoles = ['ta', 'dg', 'ict'];
     const needsApproval = !skipApprovalRoles.includes(record.staff?.role || '');
@@ -264,10 +265,22 @@ function AttendancePage() {
       }
     });
     
+    // Create notification for staff
+    if (record.staff?.user_id) {
+      await createNotification({
+        user_id: record.staff.user_id,
+        type: 'attendance',
+        title: 'Attendance Verified',
+        body: `Your attendance for ${format(new Date(record.date), 'PP')} has been verified by the ${profile?.role}.`,
+        related_module: 'attendance',
+        related_record_id: record.id
+      } as any);
+    }
+    
     handlePortalNotification(`Attendance for ${record.staff?.full_name} verified`, { severity: 'success' });
   };
 
-  const handleDecline = (record: any, newStatus: string) => {
+  const handleDecline = async (record: any, newStatus: string) => {
     updateAttendanceMutation.mutate({
       id: record.id,
       updates: {
@@ -280,10 +293,23 @@ function AttendancePage() {
         approved_at: null,
       }
     });
+
+    // Create notification for staff
+    if (record.staff?.user_id) {
+      await createNotification({
+        user_id: record.staff.user_id,
+        type: 'attendance',
+        title: 'Attendance Rejected',
+        body: `Your attendance for ${format(new Date(record.date), 'PP')} was rejected and set to ${newStatus}.`,
+        related_module: 'attendance',
+        related_record_id: record.id
+      } as any);
+    }
+
     handlePortalNotification(`Attendance for ${record.staff?.full_name} declined and set to ${newStatus}`, { severity: 'warning' });
   };
 
-  const handleApprove = (record: any) => {
+  const handleApprove = async (record: any) => {
     updateAttendanceMutation.mutate({
       id: record.id,
       updates: {
@@ -292,6 +318,19 @@ function AttendancePage() {
         approved_at: new Date().toISOString(),
       }
     });
+
+    // Create notification for staff
+    if (record.staff?.user_id) {
+      await createNotification({
+        user_id: record.staff.user_id,
+        type: 'attendance',
+        title: 'Attendance Approved',
+        body: `Your attendance for ${format(new Date(record.date), 'PP')} has been approved.`,
+        related_module: 'attendance',
+        related_record_id: record.id
+      } as any);
+    }
+
     handlePortalNotification(`Attendance for ${record.staff?.full_name} approved`, { severity: 'success' });
   };
 

@@ -34,9 +34,15 @@ import { useEffect, useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { handleDatabaseError } from '@/lib/error-handler';
 
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { startOfWeek, endOfWeek, eachDayOfInterval, format, startOfMonth, subMonths } from 'date-fns';
+import { useNotifications } from '@/lib/hooks/use-notifications';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog';
 
 export const Route = createFileRoute('/dashboard/')({
   beforeLoad: async ({ context }) => {
@@ -51,7 +57,19 @@ export const Route = createFileRoute('/dashboard/')({
 
 function DashboardPage() {
   const { profile, isSuperAdmin, isAdmin, isAccounts, isDirector, isStaff, loading } = useAuth();
+  const { notifications, markAsRead } = useNotifications();
   const [mounted, setMounted] = useState(false);
+  const [showBirthdayPopup, setShowBirthdayPopup] = useState(false);
+  const [birthdayNotifId, setBirthdayNotifId] = useState<string | null>(null);
+
+  // Check for unread birthday notification
+  useEffect(() => {
+    const birthdayNotif = notifications.find(n => n.type === 'birthday' && !n.is_read);
+    if (birthdayNotif) {
+      setBirthdayNotifId(birthdayNotif.id);
+      setShowBirthdayPopup(true);
+    }
+  }, [notifications]);
 
   // Safety check for isStaff
   const userIsStaff = isStaff === true;
@@ -267,13 +285,34 @@ function DashboardPage() {
     queryKey: ['dashboard-attendance-stats'],
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from('attendance')
-        .select('*', { count: 'exact', head: true })
-        .eq('date', today)
-        .eq('status', 'present');
+        .select('status')
+        .eq('date', today);
+      
       if (error) throw error;
-      return { presentToday: count || 0 };
+      
+      return {
+        presentToday: data.filter(r => r.status === 'present' || r.status === 'late').length,
+        absentToday: data.filter(r => r.status === 'absent').length,
+      };
+    },
+    enabled: !userIsStaff && !!profile,
+  });
+
+  const { data: allowanceStats } = useQuery({
+    queryKey: ['dashboard-allowance-stats'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('monthly_allowance_requests' as any)
+        .select('status');
+      
+      if (error) throw error;
+
+      return {
+        pending: data.filter(r => r.status === 'Processing').length,
+        paid: data.filter(r => r.status === 'Paid').length,
+      };
     },
     enabled: !userIsStaff && !!profile,
   });
@@ -358,9 +397,42 @@ function DashboardPage() {
             <p className="text-muted-foreground">Initializing dashboard...</p>
           </div>
         </div>
-      </DashboardLayout>
-    );
-  }
+
+      {/* Birthday Celebration Popup */}
+      <Dialog open={showBirthdayPopup} onOpenChange={(open) => {
+        setShowBirthdayPopup(open);
+        if (!open && birthdayNotifId) {
+          markAsRead.mutate(birthdayNotifId);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md bg-gradient-to-br from-pink-50 via-white to-purple-50 border-pink-200">
+          <DialogHeader className="flex flex-col items-center gap-4">
+            <div className="h-20 w-20 rounded-full bg-pink-100 flex items-center justify-center text-4xl animate-bounce">
+              🎂
+            </div>
+            <DialogTitle className="text-2xl font-black text-pink-600 tracking-tight text-center">
+              Happy Birthday, {profile?.full_name?.split(' ')[0]}!
+            </DialogTitle>
+            <DialogDescription className="text-center text-slate-600 font-medium leading-relaxed">
+              “Wishing you good health, success, and happiness on your special day and always. Thank you for your contributions to the GDU team!”
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex sm:justify-center mt-4">
+            <Button 
+              onClick={() => {
+                setShowBirthdayPopup(false);
+                if (birthdayNotifId) markAsRead.mutate(birthdayNotifId);
+              }}
+              className="bg-pink-500 hover:bg-pink-600 text-white rounded-full px-8 shadow-lg shadow-pink-200"
+            >
+              Thank You!
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
+}
 
   const attendanceRate = staffStats?.total ? Math.round((attendanceStats?.presentToday || 0) / staffStats.total * 100) : 0;
 
@@ -402,24 +474,25 @@ function DashboardPage() {
               description="from last month"
             />
             <StatCard
-              title="Attendance Rate"
-              value={`${attendanceRate}%`}
+              title="Present Today"
+              value={attendanceStats?.presentToday.toString() || '0'}
               icon={CheckCircle}
-              trend="+5.2%"
-              description="vs yesterday"
+              trend={`${attendanceRate}%`}
+              description="attendance rate"
             />
             <StatCard
-              title="Active Departments"
-              value={departmentStats?.total.toString() || '0'}
-              icon={Activity}
-              description="Operating units"
+              title="Absent Today"
+              value={attendanceStats?.absentToday.toString() || '0'}
+              icon={AlertCircle}
+              variant="danger"
+              description="Requires attention"
             />
             <StatCard
-              title="Monthly Payroll"
-              value={formatCurrency(allowanceSetting?.amount ? Number(allowanceSetting.amount) : 55000000)}
+              title="Paid Allowances"
+              value={allowanceStats?.paid.toString() || '0'}
               icon={Wallet}
-              trend={allowanceSetting ? "Live" : "+12%"}
-              description={allowanceSetting ? `${format(new Date(), 'MMMM yyyy')} rate` : "May 2026 budget"}
+              variant="success"
+              description="Processed this month"
             />
           </div>
         )}
