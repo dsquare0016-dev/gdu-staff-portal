@@ -8,10 +8,13 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  permissions: string[];
   loading: boolean;
   signIn: (email: string, password: string, selectedRole?: UserRole) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   isSuperAdmin: boolean;
+  isICT: boolean;
+  isTA: boolean;
   isAdmin: boolean;
   isAccounts: boolean;
   isDirector: boolean;
@@ -28,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(parsedProfile);
           // Also set a mock user to satisfy any checks
           setUser({ id: parsedProfile.id, email: parsedProfile.email } as User);
+          // For demo roles, we'll set some default permissions if needed, 
+          // but better to fetch them if possible. 
+          // For now, loading=false happens after fetchProfile or here.
           setLoading(false);
         }
       }
@@ -77,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setSession(null);
             setUser(null);
             setProfile(null);
+            setPermissions([]);
             setLoading(false);
           }
         }
@@ -103,14 +111,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('user_id', userId)
         .maybeSingle();
 
-      setProfile({
+      const newProfile = {
         ...profileData,
         staff_id: staffData?.id
-      });
+      };
+      
+      setProfile(newProfile);
+      
+      // Fetch permissions for the role
+      if (profileData?.role) {
+        await fetchPermissions(profileData.role);
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPermissions = async (roleSlug: string) => {
+    try {
+      // Get role id first
+      const { data: roleData } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('slug', roleSlug)
+        .maybeSingle();
+
+      if (roleData) {
+        const { data: permData } = await supabase
+          .from('role_permissions')
+          .select('permissions(name)')
+          .eq('role_id', roleData.id);
+
+        if (permData) {
+          const permList = permData
+            .map((p: any) => p.permissions?.name)
+            .filter(Boolean);
+          setPermissions(permList);
+        }
+      } else {
+        console.warn(`Role with slug ${roleSlug} not found in database.`);
+        // Fallback or empty permissions
+        setPermissions([]);
+      }
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setPermissions([]);
     }
   };
 
@@ -257,7 +304,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isSuperAdmin = profile?.role === 'super_admin';
-  const isICT = profile?.role === 'ict';
+  const isICT = profile?.role === 'ict' || isSuperAdmin;
+  const isTA = profile?.role === 'ta' || isSuperAdmin;
   const isAdmin = profile?.role === 'admin' || isSuperAdmin;
   const isAccounts = profile?.role === 'accounts' || isSuperAdmin;
   const isDirector = profile?.role === 'dg' || profile?.role === 'ta' || isSuperAdmin;
@@ -270,71 +318,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return roles.includes(profile.role);
   };
 
-  const canAccess = (module: string, action: string) => {
+  const canAccess = (module: string, action: string = 'view') => {
     if (isSuperAdmin) return true;
     
-    // Detailed permissions based on the prompt
-    const rolePermissions: Record<string, Record<string, string[]>> = {
-      admin: {
-        staff: ['view', 'create', 'edit'],
-        attendance: ['view', 'verify', 'approve', 'edit'],
-        departments: ['view', 'create', 'edit'],
-        announcements: ['view', 'create', 'edit'],
-        nominal_roll: ['view'],
-        '*': ['view'],
-      },
-      accounts: {
-        payroll: ['view', 'create', 'edit'],
-        allowances: ['view', 'create', 'edit'],
-        payments: ['view', 'create', 'edit'],
-        reports: ['view'],
-        '*': ['view'],
-      },
-      dg: {
-        staff: ['view'],
-        attendance: ['view'],
-        payroll: ['view'],
-        reports: ['view'],
-        nominal_roll: ['view'],
-        intelligence: ['view'],
-        '*': ['view'],
-      },
-      ta: {
-        staff: ['view'],
-        attendance: ['view'],
-        payroll: ['view'],
-        reports: ['view'],
-        nominal_roll: ['view'],
-        intelligence: ['view'],
-        '*': ['view'],
-      },
-      ict: {
-        system_settings: ['view', 'edit'],
-        branding: ['view', 'edit'],
-        staff: ['view', 'create', 'edit'],
-        attendance: ['view', 'verify', 'approve'],
-        documents: ['view', 'create', 'edit'],
-        '*': ['view'],
-      },
-      staff: {
-        profile: ['view', 'edit'], // only own
-        attendance: ['view'], // only own
-        payroll: ['view'], // only own
-        documents: ['view', 'create'], // only own
-        chat: ['view', 'create'],
-        ai_assistant: ['view'],
-        organogram: ['view'],
-      },
-    };
+    // Check database-driven permissions
+    const permissionName = `${module}:${action}`;
+    const moduleWildcard = `${module}:*`;
+    const globalWildcard = `*:*`;
 
-    const userRole = profile?.role;
-    if (!userRole || !rolePermissions[userRole]) return false;
-    
-    const rolePerms = rolePermissions[userRole];
-    const modulePerms = rolePerms[module] || rolePerms['*'];
-    
-    if (!modulePerms) return false;
-    return modulePerms.includes(action) || modulePerms.includes('*');
+    return permissions.includes(permissionName) || 
+           permissions.includes(moduleWildcard) || 
+           permissions.includes(globalWildcard);
   };
 
   return (
@@ -343,6 +337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         profile,
+        permissions,
         loading,
         signIn,
         signOut,

@@ -70,11 +70,12 @@ function LoginPage() {
   }, [profile, authLoading, navigate]);
 
   const { data: branding } = useQuery({
-    queryKey: ['branding-settings'],
+    queryKey: ['portal-branding-settings'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('branding_settings')
+        .from('portal_branding_settings')
         .select('*')
+        .eq('id', 1)
         .single();
       if (error) return null;
       return data;
@@ -116,9 +117,9 @@ function LoginPage() {
   const loginTitle = loginSettings?.title || "GDU staff Login section";
   const loginSubtitle = loginSettings?.subtitle || "Access and manage the Government Delivery Unit administration system.";
   const logoUrl = branding?.logo_url || "/logo.png";
-  const logoUrl2 = (branding as any)?.logo_url_2 || "/logo.png";
-  const logoUrl3 = (branding as any)?.logo_url_3 || "/logo.png";
-  const bgUrl = loginSettings?.login_bg_url || loginBg;
+  const logoUrl2 = "/logo.png";
+  const logoUrl3 = "/logo.png";
+  const bgUrl = branding?.login_background_url || loginBg;
 
   return (
     <main className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-2 bg-background">

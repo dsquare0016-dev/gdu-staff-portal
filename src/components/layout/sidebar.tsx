@@ -152,11 +152,12 @@ export function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const { data: branding } = useQuery({
-    queryKey: ['branding-settings'],
+    queryKey: ['portal-branding-settings'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('branding_settings')
+        .from('portal_branding_settings')
         .select('*')
+        .eq('id', 1)
         .single();
       if (error) return null;
       return data;
@@ -274,7 +275,7 @@ export function Sidebar() {
                   )}
                 </div>
               ) : (
-                <Tooltip delayDuration={0} disabled={!collapsed}>
+                <Tooltip delayDuration={0}>
                   <TooltipTrigger asChild>
                     <Link
                       to={item.href}
@@ -326,7 +327,7 @@ export function Sidebar() {
               <p className="text-xs text-muted-foreground capitalize">{profile?.role}</p>
             </div>
           )}
-          <Tooltip delayDuration={0} disabled={!collapsed}>
+          <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"

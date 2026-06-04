@@ -318,6 +318,25 @@ function DashboardPage() {
     enabled: userIsStaff && !!profile?.id,
   });
 
+  // 7. Fetch Current Month Allowance
+  const { data: allowanceSetting } = useQuery({
+    queryKey: ['dashboard-allowance-setting'],
+    queryFn: async () => {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      const { data, error } = await supabase
+        .from('monthly_allowance_settings')
+        .select('amount')
+        .eq('month', month)
+        .eq('year', year)
+        .single();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    enabled: !!profile && !userIsStaff,
+  });
+
   const formatCurrency = (value: number) => {
     try {
       return new Intl.NumberFormat('en-NG', {
@@ -397,10 +416,10 @@ function DashboardPage() {
             />
             <StatCard
               title="Monthly Payroll"
-              value={formatCurrency(55000000)}
-              icon={DollarSign}
-              trend="+12%"
-              description="May 2026 budget"
+              value={formatCurrency(allowanceSetting?.amount ? Number(allowanceSetting.amount) : 55000000)}
+              icon={Wallet}
+              trend={allowanceSetting ? "Live" : "+12%"}
+              description={allowanceSetting ? `${format(new Date(), 'MMMM yyyy')} rate` : "May 2026 budget"}
             />
           </div>
         )}

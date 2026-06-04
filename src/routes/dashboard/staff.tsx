@@ -775,11 +775,22 @@ function StaffForm({
 
     try {
       setIsSubmitting(true);
-      // Upload to Cloudinary
-      const res = await uploadToCloudinary(file, 'passports');
+      
+      const fileExt = file.name.split('.').pop();
+      const filePath = `passports/${formData.readable_id}-${Math.random()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('staff-assets')
+        .upload(filePath, file);
 
-      setFormData({ ...formData, passport_url: res.secure_url });
-      handlePortalNotification('Passport photo uploaded and displayed', { severity: 'success' });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('staff-assets')
+        .getPublicUrl(filePath);
+
+      setFormData({ ...formData, passport_url: publicUrl });
+      handlePortalNotification('Passport photo uploaded', { severity: 'success' });
     } catch (error: any) {
       handlePortalNotification('Error uploading passport: ' + error.message, { severity: 'error' });
     } finally {

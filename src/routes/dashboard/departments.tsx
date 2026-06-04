@@ -18,6 +18,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -40,8 +41,15 @@ import {
   Users,
   UserCircle,
   Eye,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export const Route = createFileRoute('/dashboard/departments')({
   head: () => ({
@@ -50,89 +58,64 @@ export const Route = createFileRoute('/dashboard/departments')({
   component: DepartmentsPage,
 });
 
-const mockDepartments = [
-  {
-    id: '1',
-    name: 'Administration',
-    code: 'ADMIN',
-    description: 'Handles general administration and human resources',
-    head_name: 'David Adeyemi',
-    head_role: 'Director General',
-    staff_count: 35,
-    parent_id: null,
-    is_active: true,
-  },
-  {
-    id: '2',
-    name: 'Finance',
-    code: 'FIN',
-    description: 'Manages all financial operations and payroll',
-    head_name: 'Grace Okonkwo',
-    head_role: 'Chief Financial Officer',
-    staff_count: 25,
-    parent_id: '1',
-    is_active: true,
-  },
-  {
-    id: '3',
-    name: 'ICT',
-    code: 'ICT',
-    description: 'Information and Communications Technology',
-    head_name: 'Emmanuel Obi',
-    head_role: 'ICT Director',
-    staff_count: 18,
-    parent_id: '1',
-    is_active: true,
-  },
-  {
-    id: '4',
-    name: 'Operations',
-    code: 'OPS',
-    description: 'Core operations and field activities',
-    head_name: 'Fatima Bello',
-    head_role: 'Director, Operations',
-    staff_count: 45,
-    parent_id: '1',
-    is_active: true,
-  },
-  {
-    id: '5',
-    name: 'Human Resources',
-    code: 'HR',
-    description: 'Staff management and development',
-    head_name: 'Chidi Okafor',
-    head_role: 'HR Manager',
-    staff_count: 15,
-    parent_id: '1',
-    is_active: true,
-  },
-  {
-    id: '6',
-    name: 'Procurement',
-    code: 'PROC',
-    description: 'Manages procurement and supplies',
-    head_name: 'Kunle Bakare',
-    head_role: 'Procurement Officer',
-    staff_count: 12,
-    parent_id: '1',
-    is_active: false,
-  },
-];
-
 function DepartmentsPage() {
   const { canAccess } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedDept, setSelectedDept] = useState<any>(null);
+  const queryClient = useQueryClient();
 
   const canManage = canAccess('staff', 'create') || canAccess('staff', 'edit');
 
-  const filteredDepartments = mockDepartments.filter(
+  // Fetch departments
+  const { data: departments, isLoading } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select(`
+          *,
+          head:head_of_department_id(full_name, position),
+          staff_count:staff_records(count)
+        `);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('departments').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      toast.success('Department deleted successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Error deleting department: ${error.message}`);
+    },
+  });
+
+  const filteredDepartments = departments?.filter(
     (dept) =>
       dept.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      dept.code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      (dept.code?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+  ) || [];
 
-  const activeDepts = mockDepartments.filter((d) => d.is_active).length;
+  const activeDepts = departments?.filter((d) => d.status === 'active').length || 0;
+  const totalStaff = departments?.reduce((acc, d) => acc + (d.staff_count?.[0]?.count || 0), 0) || 0;
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex h-[60vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -171,7 +154,7 @@ function DepartmentsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Departments</p>
-                  <p className="text-2xl font-bold">{mockDepartments.length}</p>
+                  <p className="text-2xl font-bold">{departments?.length || 0}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
                   <Building2 className="h-5 w-5 text-primary" />
@@ -197,7 +180,7 @@ function DepartmentsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Staff</p>
-                  <p className="text-2xl font-bold">156</p>
+                  <p className="text-2xl font-bold">{totalStaff}</p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                   <Users className="h-5 w-5 text-blue-500" />
@@ -254,32 +237,36 @@ function DepartmentsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{dept.code}</Badge>
+                      <Badge variant="outline">{dept.code || 'N/A'}</Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <UserCircle className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm">{dept.head_name}</p>
-                          <p className="text-xs text-muted-foreground">{dept.head_role}</p>
+                      {dept.head ? (
+                        <div className="flex items-center gap-2">
+                          <UserCircle className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm">{dept.head.full_name}</p>
+                            <p className="text-xs text-muted-foreground">{dept.head.position}</p>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Not assigned</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Users className="h-4 w-4 text-muted-foreground" />
-                        <span>{dept.staff_count}</span>
+                        <span>{dept.staff_count?.[0]?.count || 0}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge
                         className={cn(
-                          dept.is_active
+                          dept.status === 'active'
                             ? 'bg-green-500/10 text-green-600 border-green-500/20'
                             : 'bg-gray-500/10 text-gray-600 border-gray-500/20'
                         )}
                       >
-                        {dept.is_active ? 'Active' : 'Inactive'}
+                        {dept.status === 'active' ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -292,24 +279,29 @@ function DepartmentsPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
                           {canManage && (
                             <>
-                              <DropdownMenuItem className="cursor-pointer">
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={() => {
+                                  setSelectedDept(dept);
+                                  setIsEditDialogOpen(true);
+                                }}
+                              >
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Department
-                              </DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer">
-                                <Users className="mr-2 h-4 w-4" />
-                                Manage Staff
                               </DropdownMenuItem>
                             </>
                           )}
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive cursor-pointer"
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this department?')) {
+                                deleteMutation.mutate(dept.id);
+                              }
+                            }}
+                          >
                             <Trash2 className="mr-2 h-4 w-4" />
                             Delete
                           </DropdownMenuItem>
@@ -318,43 +310,160 @@ function DepartmentsPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+                {filteredDepartments.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No departments found
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Department</DialogTitle>
+              <DialogDescription>
+                Update department information.
+              </DialogDescription>
+            </DialogHeader>
+            {selectedDept && (
+              <DepartmentForm
+                department={selectedDept}
+                onSuccess={() => setIsEditDialogOpen(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
 }
 
-function DepartmentForm({ onSuccess }: { onSuccess: () => void }) {
+function DepartmentForm({ department, onSuccess }: { department?: any; onSuccess: () => void }) {
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState({
+    name: department?.name || '',
+    code: department?.code || '',
+    description: department?.description || '',
+    head_of_department_id: department?.head_of_department_id || '',
+    status: department?.status || 'active',
+  });
+
+  const { data: staff } = useQuery({
+    queryKey: ['staff-for-dept-head'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select('id, full_name, position')
+        .eq('status', 'active');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (department) {
+        const { error } = await supabase
+          .from('departments')
+          .update(data)
+          .eq('id', department.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('departments')
+          .insert([data]);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      toast.success(`Department ${department ? 'updated' : 'created'} successfully`);
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast.error(`Error: ${error.message}`);
+    },
+  });
+
   return (
     <div className="grid gap-4 py-4">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Department Name</label>
-        <Input placeholder="Enter department name" />
+        <Label htmlFor="dept-name">Department Name</Label>
+        <Input
+          id="dept-name"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          placeholder="Enter department name"
+        />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium">Department Code</label>
-        <Input placeholder="e.g., FIN, HR, ICT" />
+        <Label htmlFor="dept-code">Department Code</Label>
+        <Input
+          id="dept-code"
+          value={formData.code}
+          onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+          placeholder="e.g., FIN, HR, ICT"
+        />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium">Description</label>
-        <Input placeholder="Brief description" />
+        <Label htmlFor="dept-desc">Description</Label>
+        <Textarea
+          id="dept-desc"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Brief description"
+        />
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium">Head of Department</label>
-        <Input placeholder="Select or search staff" />
+        <Label>Head of Department</Label>
+        <Select
+          value={formData.head_of_department_id || 'none'}
+          onValueChange={(val) => setFormData({ ...formData, head_of_department_id: val === 'none' ? null : val })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select Head of Department" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None</SelectItem>
+            {staff?.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.full_name} ({s.position})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-medium">Parent Department</label>
-        <Input placeholder="Select parent department (optional)" />
+        <Label>Status</Label>
+        <Select
+          value={formData.status}
+          onValueChange={(val) => setFormData({ ...formData, status: val })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex justify-end gap-3 mt-4">
         <Button variant="outline" onClick={onSuccess}>
           Cancel
         </Button>
-        <Button>Create Department</Button>
+        <Button onClick={() => mutation.mutate(formData)} disabled={mutation.isPending}>
+          {mutation.isPending ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : null}
+          {department ? 'Update' : 'Create'} Department
+        </Button>
       </div>
     </div>
   );

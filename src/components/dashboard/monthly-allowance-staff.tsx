@@ -11,6 +11,7 @@ export function MonthlyAllowanceStaff() {
     settings, 
     attendanceStats, 
     myRequest, 
+    isEligible: eligibility,
     isLoading, 
     submitRequest, 
     currentMonthName, 
@@ -28,7 +29,7 @@ export function MonthlyAllowanceStaff() {
   }
 
   const attendancePercentage = attendanceStats?.percentage || 0;
-  const isEligible = attendancePercentage >= 80;
+  const isEligible = eligibility.status;
   const allowanceAmount = settings?.amount || 0;
   
   const getStatusBadge = (status: string) => {
@@ -97,9 +98,9 @@ export function MonthlyAllowanceStaff() {
           <div className="space-y-4">
             {!isEligible && (
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex gap-3 items-start">
-                <XCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
                 <p className="text-sm text-amber-800 leading-relaxed font-medium">
-                  Sorry, you do not have up to 80% attendance and you are not entitled to this month’s payment. Thanks for your understanding.
+                  {eligibility.reason}
                 </p>
               </div>
             )}

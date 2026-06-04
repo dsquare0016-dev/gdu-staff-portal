@@ -15,9 +15,11 @@ import {
   User, 
   Building2, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Settings2,
+  Shield
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -35,6 +37,9 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export function MonthlyAllowanceAccountant() {
   const { 
@@ -47,17 +52,57 @@ export function MonthlyAllowanceAccountant() {
     currentYear 
   } = useMonthlyAllowance();
 
-  const [amount, setAmount] = useState(settings?.amount?.toString() || '');
+  const [amount, setAmount] = useState('');
+  const [minAttendance, setMinAttendance] = useState('80');
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean, requestId: string, reason: string }>({
     open: false,
     requestId: '',
     reason: ''
   });
 
+  useEffect(() => {
+    if (settings) {
+      setAmount(settings.amount?.toString() || '');
+      setMinAttendance(settings.minimum_attendance_percentage?.toString() || '80');
+      setSelectedRoles(settings.eligible_roles?.map((r: any) => r.role_id) || []);
+      setSelectedDepts(settings.eligible_departments?.map((d: any) => d.department_id) || []);
+    }
+  }, [settings]);
+
+  // Fetch all roles
+  const { data: roles } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('roles').select('*');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch all departments
+  const { data: departments } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('departments').select('*');
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const handleUpdateSettings = () => {
-    const val = parseFloat(amount);
-    if (isNaN(val)) return;
-    updateSettings.mutate(val);
+    const amt = parseFloat(amount);
+    const minAtt = parseInt(minAttendance);
+    if (isNaN(amt) || isNaN(minAtt)) return;
+    
+    updateSettings.mutate({
+      amount: amt,
+      minAttendance: minAtt,
+      roleIds: selectedRoles,
+      deptIds: selectedDepts
+    });
   };
 
   const handleStatusUpdate = (requestId: string, status: AllowanceStatus) => {
@@ -74,6 +119,18 @@ export function MonthlyAllowanceAccountant() {
     setRejectDialog({ open: false, requestId: '', reason: '' });
   };
 
+  const toggleRole = (roleId: string) => {
+    setSelectedRoles(prev => 
+      prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]
+    );
+  };
+
+  const toggleDept = (deptId: string) => {
+    setSelectedDepts(prev => 
+      prev.includes(deptId) ? prev.filter(id => id !== deptId) : [...prev, deptId]
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -84,35 +141,96 @@ export function MonthlyAllowanceAccountant() {
 
   return (
     <div className="space-y-6">
-      <Card className="border shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-primary" />
-            Allowance Settings — {currentMonthName} {currentYear}
-          </CardTitle>
-          <CardDescription>Set the monthly allowance amount for all staff members.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-4 max-w-md">
-            <div className="space-y-2 flex-1">
-              <Label htmlFor="amount">Allowance Amount (₦)</Label>
-              <Input 
-                id="amount" 
-                type="number" 
-                value={amount} 
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                className="h-10 rounded-xl"
-              />
+      <Card className="border shadow-sm overflow-hidden">
+        <CardHeader className="bg-primary/5 border-b pb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Settings2 className="h-5 w-5 text-primary" />
+                Eligibility Rules — {currentMonthName} {currentYear}
+              </CardTitle>
+              <CardDescription>Configure who is entitled to this month's allowance.</CardDescription>
             </div>
             <Button 
               onClick={handleUpdateSettings} 
               disabled={updateSettings.isPending}
-              className="h-10 rounded-xl gap-2 px-6"
+              className="rounded-xl gap-2 px-6"
             >
               {updateSettings.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Update Amount
+              Save All Rules
             </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Allowance Amount (₦)</Label>
+                  <Input 
+                    id="amount" 
+                    type="number" 
+                    value={amount} 
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="minAttendance">Min. Attendance (%)</Label>
+                  <Input 
+                    id="minAttendance" 
+                    type="number" 
+                    value={minAttendance} 
+                    onChange={(e) => setMinAttendance(e.target.value)}
+                    placeholder="80"
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-sm font-bold flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-primary" />
+                  Eligible Roles
+                </Label>
+                <div className="grid grid-cols-2 gap-3 p-4 border rounded-xl bg-muted/20 max-h-[200px] overflow-y-auto">
+                  {roles?.map(role => (
+                    <div key={role.id} className="flex items-center space-x-2">
+                      <Checkbox 
+                        id={`role-${role.id}`} 
+                        checked={selectedRoles.includes(role.id)}
+                        onCheckedChange={() => toggleRole(role.id)}
+                      />
+                      <label htmlFor={`role-${role.id}`} className="text-xs font-medium cursor-pointer">{role.name}</label>
+                    </div>
+                  ))}
+                  {(!roles || roles.length === 0) && <p className="text-xs text-muted-foreground italic col-span-2">No roles found</p>}
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">If none selected, all roles are eligible.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-bold flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-primary" />
+                Eligible Departments
+              </Label>
+              <div className="grid grid-cols-2 gap-3 p-4 border rounded-xl bg-muted/20 max-h-[200px] overflow-y-auto">
+                {departments?.map(dept => (
+                  <div key={dept.id} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={`dept-${dept.id}`} 
+                      checked={selectedDepts.includes(dept.id)}
+                      onCheckedChange={() => toggleDept(dept.id)}
+                    />
+                    <label htmlFor={`dept-${dept.id}`} className="text-xs font-medium cursor-pointer">{dept.name}</label>
+                  </div>
+                ))}
+                {(!departments || departments.length === 0) && <p className="text-xs text-muted-foreground italic col-span-2">No departments found</p>}
+              </div>
+              <p className="text-[10px] text-muted-foreground italic">If none selected, all departments are eligible.</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -166,7 +284,7 @@ export function MonthlyAllowanceAccountant() {
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={req.attendance_percentage >= 80 ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}>
+                        <Badge variant="outline" className={req.attendance_percentage >= (settings?.minimum_attendance_percentage || 80) ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}>
                           {req.attendance_percentage}%
                         </Badge>
                       </TableCell>

@@ -8,8 +8,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.departments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL UNIQUE,
+    code TEXT,
     description TEXT,
-    is_active BOOLEAN DEFAULT true,
+    head_of_department_id UUID,
+    status TEXT DEFAULT 'active',
+    created_by UUID,
+    updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -105,19 +109,21 @@ CREATE TABLE IF NOT EXISTS public.payroll (
     UNIQUE(staff_id, month, year)
 );
 
--- 7. Branding Settings
-CREATE TABLE IF NOT EXISTS public.branding_settings (
+-- 7. Portal Branding Settings
+CREATE TABLE IF NOT EXISTS public.portal_branding_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,
     portal_name TEXT DEFAULT 'GDU Staff Portal',
-    logo_url TEXT, -- Primary GDU Logo
-    logo_url_2 TEXT, -- State Seal
-    logo_url_3 TEXT, -- Additional Seal
+    logo_url TEXT,
+    favicon_url TEXT,
+    login_background_url TEXT,
     primary_color TEXT DEFAULT '#1e3a8a',
     secondary_color TEXT DEFAULT '#b45309',
-    hero_title TEXT DEFAULT 'GDU Staff Portal',
-    hero_subtitle TEXT DEFAULT 'Government Delivery Unit',
-    hero_tagline TEXT DEFAULT 'Excellence in Service',
+    login_title TEXT DEFAULT 'Welcome Back',
+    login_subtitle TEXT DEFAULT 'Sign in to access your dashboard',
     footer_text TEXT DEFAULT '© 2026 Government Delivery Unit',
+    created_by UUID,
+    updated_by UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     CONSTRAINT single_row CHECK (id = 1)
 );
@@ -137,8 +143,8 @@ CREATE TABLE IF NOT EXISTS public.organogram (
 );
 
 -- Seed Branding
-INSERT INTO public.branding_settings (id, portal_name) 
-VALUES (1, 'GDU Staff Portal') 
+INSERT INTO public.portal_branding_settings (id) 
+VALUES (1) 
 ON CONFLICT (id) DO NOTHING;
 
 -- RLS POLICIES
@@ -148,11 +154,11 @@ ALTER TABLE public.attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payroll ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.branding_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.portal_branding_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organogram ENABLE ROW LEVEL SECURITY;
 
 -- Simple Authenticated Access (Refine for production)
-CREATE POLICY "Public read branding" ON public.branding_settings FOR SELECT USING (true);
+CREATE POLICY "Public read branding" ON public.portal_branding_settings FOR SELECT USING (true);
 CREATE POLICY "Auth read departments" ON public.departments FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Auth read staff" ON public.staff_records FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "Auth read attendance" ON public.attendance FOR SELECT USING (auth.role() = 'authenticated');
@@ -178,29 +184,80 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.organogram;
 -- 13. MONTHLY ALLOWANCE SYSTEM
 -- ============================================================
 
+-- Roles & Permissions
+CREATE TABLE IF NOT EXISTS public.roles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    status TEXT DEFAULT 'active', -- active, inactive
+    created_by UUID,
+    updated_by UUID,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.permissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    module TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.role_permissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    role_id UUID REFERENCES public.roles(id) ON DELETE CASCADE,
+    permission_id UUID REFERENCES public.permissions(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(role_id, permission_id)
+);
+
 -- Monthly Allowance Settings
 CREATE TABLE IF NOT EXISTS public.monthly_allowance_settings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     month INTEGER NOT NULL, -- 1-12
     year INTEGER NOT NULL,
     amount DECIMAL(12, 2) NOT NULL,
-    set_by UUID REFERENCES public.profiles(id),
+    minimum_attendance_percentage INTEGER DEFAULT 80,
+    status TEXT DEFAULT 'active',
+    created_by UUID,
+    updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(month, year)
+);
+
+-- Allowance Eligibility
+CREATE TABLE IF NOT EXISTS public.monthly_allowance_eligible_roles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    allowance_setting_id UUID REFERENCES public.monthly_allowance_settings(id) ON DELETE CASCADE,
+    role_id UUID REFERENCES public.roles(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(allowance_setting_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.monthly_allowance_eligible_departments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    allowance_setting_id UUID REFERENCES public.monthly_allowance_settings(id) ON DELETE CASCADE,
+    department_id UUID REFERENCES public.departments(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(allowance_setting_id, department_id)
 );
 
 -- Monthly Allowance Requests
 CREATE TABLE IF NOT EXISTS public.monthly_allowance_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     staff_id UUID NOT NULL REFERENCES public.staff_records(id) ON DELETE CASCADE,
+    department_id UUID REFERENCES public.departments(id),
+    role_id UUID REFERENCES public.roles(id),
     month INTEGER NOT NULL,
     year INTEGER NOT NULL,
     attendance_percentage INTEGER NOT NULL,
     allowance_amount DECIMAL(12, 2) NOT NULL,
     status TEXT NOT NULL DEFAULT 'Processing' CHECK (status IN ('Not Requested', 'Processing', 'Approved', 'Paid', 'Rejected')),
     requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    reviewed_by UUID REFERENCES public.profiles(id),
+    reviewed_by UUID,
     reviewed_at TIMESTAMP WITH TIME ZONE,
     paid_at TIMESTAMP WITH TIME ZONE,
     rejection_reason TEXT,
@@ -209,27 +266,32 @@ CREATE TABLE IF NOT EXISTS public.monthly_allowance_requests (
     UNIQUE(staff_id, month, year)
 );
 
+-- Seed Initial Roles
+INSERT INTO public.roles (name, description) VALUES 
+('Super Admin', 'Full system access'),
+('Admin', 'Manage staff and departments'),
+('Accountant', 'Manage payroll and allowances'),
+('ICT', 'Technical settings and branding'),
+('DG', 'Director General - oversight summaries'),
+('TA', 'Technical Assistant - oversight summaries'),
+('Staff', 'General staff access')
+ON CONFLICT (name) DO NOTHING;
+
 -- RLS for Monthly Allowance
+ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.role_permissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.monthly_allowance_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.monthly_allowance_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monthly_allowance_eligible_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.monthly_allowance_eligible_departments ENABLE ROW LEVEL SECURITY;
 
+CREATE POLICY "Public read roles" ON public.roles FOR SELECT USING (true);
+CREATE POLICY "Public read permissions" ON public.permissions FOR SELECT USING (true);
 CREATE POLICY "Everyone can view allowance settings" ON public.monthly_allowance_settings
     FOR SELECT USING (true);
-
-CREATE POLICY "Accountant manage allowance settings" ON public.monthly_allowance_settings
-    FOR ALL USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('accounts', 'super_admin'));
-
-CREATE POLICY "Staff view own allowance requests" ON public.monthly_allowance_requests
-    FOR SELECT USING (staff_id IN (SELECT id FROM public.staff_records WHERE user_id = auth.uid()));
-
-CREATE POLICY "Privileged roles view all allowance requests" ON public.monthly_allowance_requests
-    FOR SELECT USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'));
-
-CREATE POLICY "Staff create allowance requests" ON public.monthly_allowance_requests
-    FOR INSERT WITH CHECK (staff_id IN (SELECT id FROM public.staff_records WHERE user_id = auth.uid()));
-
-CREATE POLICY "Accountant update allowance requests" ON public.monthly_allowance_requests
-    FOR UPDATE USING ((SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('accounts', 'super_admin'));
+CREATE POLICY "Auth read eligibility" ON public.monthly_allowance_eligible_roles FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Auth read eligibility dept" ON public.monthly_allowance_eligible_departments FOR SELECT USING (auth.role() = 'authenticated');
 
 -- Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE public.monthly_allowance_settings;
