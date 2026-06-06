@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
 import { StatCard } from '@/components/dashboard/stat-card';
@@ -59,15 +59,25 @@ export const Route = createFileRoute('/dashboard/')({
 });
 
 function DashboardPage() {
-  const { profile, isSuperAdmin, isAdmin, isAccounts, isDirector, isStaff, loading } = useAuth();
+  const { profile, isSuperAdmin, isAdmin, isAccounts, isDirector, isStaff, isTechnicalAssistant, loading, authError } = useAuth();
   const { notifications, markAsRead } = useNotifications();
   const [mounted, setMounted] = useState(false);
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(false);
   const [birthdayNotifId, setBirthdayNotifId] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+
+  // Redirect if not logged in and not loading
+  useEffect(() => {
+    if (mounted && !loading && !profile && !authError) {
+      console.log('[Dashboard] No session found, redirecting to login...');
+      navigate({ to: '/' });
+    }
+  }, [mounted, loading, profile, authError, navigate]);
+
   // Check for unread birthday notification
   useEffect(() => {
-    const birthdayNotif = notifications.find(n => n.type === 'birthday' && !n.is_read);
+    const birthdayNotif = notifications.find(n => (n.type as string) === 'birthday' && !n.is_read);
     if (birthdayNotif) {
       setBirthdayNotifId(birthdayNotif.id);
       setShowBirthdayPopup(true);
@@ -79,6 +89,7 @@ function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
+    console.log('DASHBOARD_LOADED');
   }, []);
 
   // 1. Fetch Weekly Attendance Data
@@ -102,7 +113,7 @@ function DashboardPage() {
       const days = eachDayOfInterval({ start, end });
       return days.map(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const dayRecords = data.filter(r => r.date === dateStr);
+        const dayRecords = (data || []).filter(r => r.date === dateStr);
         return {
           name: format(day, 'EEE'),
           present: dayRecords.filter(r => r.status === 'present').length,
@@ -111,7 +122,7 @@ function DashboardPage() {
         };
       });
     },
-    enabled: !!profile && !userIsStaff,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   // 2. Fetch Staff Distribution by Department
@@ -128,7 +139,7 @@ function DashboardPage() {
       }
 
       const counts: Record<string, number> = {};
-      data.forEach(r => {
+      (data || []).forEach(r => {
         const deptName = r.department?.name || 'Unassigned';
         counts[deptName] = (counts[deptName] || 0) + 1;
       });
@@ -140,7 +151,7 @@ function DashboardPage() {
         color: colors[index % colors.length]
       }));
     },
-    enabled: !!profile && !userIsStaff,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   // 3. Fetch Monthly Payroll Trend
@@ -162,7 +173,7 @@ function DashboardPage() {
       return months.map(m => {
         const monthNum = m.getMonth() + 1;
         const yearNum = m.getFullYear();
-        const monthData = data.filter(r => r.month === monthNum && r.year === yearNum);
+        const monthData = (data || []).filter(r => r.month === monthNum && r.year === yearNum);
         const total = monthData.reduce((sum, r) => sum + Number(r.net_salary), 0);
         return {
           name: format(m, 'MMM'),
@@ -170,7 +181,7 @@ function DashboardPage() {
         };
       });
     },
-    enabled: !!profile && !userIsStaff,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   // 4. Fetch Recent Activity (Audit Logs)
@@ -180,7 +191,7 @@ function DashboardPage() {
       const { data, error } = await supabase
         .from('audit_logs')
         .select('id, action, created_at, user:profiles(full_name, avatar_url)')
-        .order('created_at', { descending: true })
+        .order('created_at', { ascending: false })
         .limit(10);
       
       if (error) {
@@ -189,7 +200,7 @@ function DashboardPage() {
         return [];
       }
 
-      return data.map(log => ({
+      return (data || []).map(log => ({
         id: log.id,
         user: log.user?.full_name || 'System',
         action: log.action.toLowerCase(),
@@ -197,61 +208,115 @@ function DashboardPage() {
         avatar: log.user?.avatar_url || ''
       }));
     },
-    enabled: !!profile && !userIsStaff,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   // 5. Fetch Pending Approvals
   const { data: pendingApprovals = [], isLoading: isLoadingApprovals } = useQuery({
     queryKey: ['dashboard-pending-approvals'],
     queryFn: async () => {
-      const [leaves, allowances, docs] = await Promise.all([
-        supabase.from('leave_requests').select('id, staff:staff_records(full_name), created_at').eq('status', 'pending').limit(5),
-        supabase.from('monthly_allowance_requests').select('id, staff:staff_records(full_name), created_at').eq('status', 'Processing').limit(5),
-        supabase.from('documents').select('id, name, staff:staff_records(full_name), created_at').eq('status', 'pending').limit(5)
-      ]);
-
       const allPending: any[] = [];
       
-      leaves.data?.forEach(l => allPending.push({
-        id: l.id,
-        type: 'Leave Request',
-        staff: l.staff?.full_name || 'Unknown',
-        date: format(new Date(l.created_at), 'yyyy-MM-dd')
-      }));
+      try {
+        // Fetch leave requests with staff name (this join is safe)
+        const { data: leaves } = await supabase
+          .from('leave_requests')
+          .select('id, staff_id, created_at')
+          .eq('status', 'pending')
+          .limit(5);
+        
+        leaves?.forEach(l => allPending.push({
+          id: l.id,
+          type: 'Leave Request',
+          staff: 'Staff Member',
+          staff_id: l.staff_id,
+          date: format(new Date(l.created_at), 'yyyy-MM-dd')
+        }));
+      } catch (e) { /* non-critical */ }
 
-      allowances.data?.forEach(a => allPending.push({
-        id: a.id,
-        type: 'Allowance Request',
-        staff: a.staff?.full_name || 'Unknown',
-        date: format(new Date(a.created_at), 'yyyy-MM-dd')
-      }));
+      try {
+        // Fetch monthly allowance requests — avoid joining staff_records to prevent relationship error
+        const { data: allowances } = await supabase
+          .from('monthly_allowance_requests')
+          .select('id, staff_id, created_at')
+          .eq('status', 'Processing')
+          .limit(5);
+        
+        allowances?.forEach(a => allPending.push({
+          id: a.id,
+          type: 'Allowance Request',
+          staff: 'Staff Member',
+          staff_id: a.staff_id,
+          date: format(new Date(a.created_at), 'yyyy-MM-dd')
+        }));
+      } catch (e) { /* non-critical */ }
 
-      docs.data?.forEach(d => allPending.push({
-        id: d.id,
-        type: `Document: ${d.name}`,
-        staff: d.staff?.full_name || 'Unknown',
-        date: format(new Date(d.created_at), 'yyyy-MM-dd')
-      }));
+      try {
+        // Fetch documents
+        const { data: docs } = await supabase
+          .from('documents')
+          .select('id, name, staff_id, created_at')
+          .eq('status', 'pending')
+          .limit(5);
+        
+        docs?.forEach(d => allPending.push({
+          id: d.id,
+          type: `Document: ${d.name}`,
+          staff: 'Staff Member',
+          staff_id: d.staff_id,
+          date: format(new Date(d.created_at), 'yyyy-MM-dd')
+        }));
+      } catch (e) { /* non-critical */ }
+
+      // Batch fetch staff names for all collected staff_ids
+      const staffIds = [...new Set(allPending.map(p => p.staff_id).filter(Boolean))];
+      if (staffIds.length > 0) {
+        try {
+          const { data: staffData } = await supabase
+            .from('staff_records')
+            .select('id, full_name')
+            .in('id', staffIds);
+          
+          const staffMap = (staffData || []).reduce((acc: Record<string, string>, s) => {
+            acc[s.id] = s.full_name;
+            return acc;
+          }, {});
+          
+          allPending.forEach(p => {
+            if (p.staff_id && staffMap[p.staff_id]) {
+              p.staff = staffMap[p.staff_id];
+            }
+          });
+        } catch (e) { /* non-critical */ }
+      }
 
       return allPending.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
     },
-    enabled: !!profile && !userIsStaff,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   // 6. Fetch Global Stats for Admin
   const { data: globalStats } = useQuery({
     queryKey: ['dashboard-global-stats'],
     queryFn: async () => {
-      const [docs, depts] = await Promise.all([
-        supabase.from('documents').select('*', { count: 'exact', head: true }),
-        supabase.from('departments').select('*', { count: 'exact', head: true }).eq('is_active', true)
-      ]);
-      return {
-        totalDocuments: docs.count || 0,
-        totalDepartments: depts.count || 0
-      };
+      try {
+        const [docs, depts] = await Promise.all([
+          supabase.from('documents').select('*', { count: 'exact', head: true }),
+          supabase.from('departments').select('*', { count: 'exact', head: true }).eq('is_active', true)
+        ]);
+        return {
+          totalDocuments: docs.count || 0,
+          totalDepartments: depts.count || 0
+        };
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching global stats:', e.message);
+        return {
+          totalDocuments: 0,
+          totalDepartments: 0
+        };
+      }
     },
-    enabled: !!profile && !userIsStaff,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   // Fetch personal allowances for staff
@@ -259,14 +324,22 @@ function DashboardPage() {
     queryKey: ['my-allowances', profile?.staff_id],
     queryFn: async () => {
       if (!profile?.staff_id) return [];
-      const { data, error } = await supabase
-        .from('allowances')
-        .select('*')
-        .eq('staff_id', profile.staff_id)
-        .order('payment_date', { descending: true })
-        .limit(3);
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase
+          .from('allowances')
+          .select('*')
+          .eq('staff_id', profile.staff_id)
+          .order('payment_date', { ascending: false })
+          .limit(3);
+        if (error) {
+          console.warn('[Dashboard] Failed to fetch personal allowances:', error.message);
+          return [];
+        }
+        return data || [];
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching personal allowances:', e.message);
+        return [];
+      }
     },
     enabled: userIsStaff && !!profile?.staff_id,
   });
@@ -275,87 +348,130 @@ function DashboardPage() {
   const { data: staffStats } = useQuery({
     queryKey: ['dashboard-staff-stats'],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from('staff_records')
-        .select('*', { count: 'exact', head: true });
-      if (error) throw error;
-      return { total: count || 0 };
+      try {
+        const { count, error } = await supabase
+          .from('staff_records')
+          .select('*', { count: 'exact', head: true });
+        if (error) {
+          console.warn('[Dashboard] Failed to fetch staff stats:', error.message);
+          return { total: 0 };
+        }
+        return { total: count || 0 };
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching staff stats:', e.message);
+        return { total: 0 };
+      }
     },
-    enabled: !userIsStaff && !!profile,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   const { data: attendanceStats } = useQuery({
     queryKey: ['dashboard-attendance-stats'],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('attendance')
-        .select('status')
-        .eq('date', today);
-      
-      if (error) throw error;
-      
-      return {
-        presentToday: data.filter(r => r.status === 'present' || r.status === 'late').length,
-        absentToday: data.filter(r => r.status === 'absent').length,
-      };
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase
+          .from('attendance')
+          .select('status')
+          .eq('date', today);
+        
+        if (error) {
+          console.warn('[Dashboard] Failed to fetch attendance stats:', error.message);
+          return { presentToday: 0, absentToday: 0 };
+        }
+        
+        const safeData = data || [];
+        return {
+          presentToday: safeData.filter(r => r.status === 'present' || r.status === 'late').length,
+          absentToday: safeData.filter(r => r.status === 'absent').length,
+        };
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching attendance stats:', e.message);
+        return { presentToday: 0, absentToday: 0 };
+      }
     },
-    enabled: !userIsStaff && !!profile,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   const { data: allowanceStats } = useQuery({
     queryKey: ['dashboard-allowance-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('monthly_allowance_requests')
-        .select('status');
-      
-      if (error) throw error;
+      try {
+        const { data, error } = await supabase
+          .from('monthly_allowance_requests')
+          .select('status');
+        
+        if (error) {
+          console.warn('[Dashboard] Failed to fetch allowance stats:', error.message);
+          return { pending: 0, paid: 0 };
+        }
 
-      return {
-        pending: data.filter(r => r.status === 'Processing').length,
-        paid: data.filter(r => r.status === 'Paid').length,
-      };
+        const safeData = data || [];
+        return {
+          pending: safeData.filter(r => r.status === 'Processing').length,
+          paid: safeData.filter(r => r.status === 'Paid').length,
+        };
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching allowance stats:', e.message);
+        return { pending: 0, paid: 0 };
+      }
     },
-    enabled: !userIsStaff && !!profile,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   const { data: departmentStats } = useQuery({
     queryKey: ['dashboard-department-stats'],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from('departments')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_active', true);
-      if (error) throw error;
-      return { total: count || 0 };
+      try {
+        const { count, error } = await supabase
+          .from('departments')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true);
+        if (error) {
+          console.warn('[Dashboard] Failed to fetch department stats:', error.message);
+          return { total: 0 };
+        }
+        return { total: count || 0 };
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching department stats:', e.message);
+        return { total: 0 };
+      }
     },
-    enabled: !userIsStaff && !!profile,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   // Staff Personal Stats
   const { data: personalStats } = useQuery({
     queryKey: ['dashboard-personal-stats', profile?.staff_id],
     queryFn: async () => {
-      if (!profile?.staff_id) return null;
+      if (!profile?.staff_id) return { attendanceRate: 0, totalPresent: 0, lastCheckIn: null };
       
-      const { data: records, error } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('staff_id', profile.staff_id)
-        .eq('approved', true);
-      
-      if (error) throw error;
-      
-      const presentCount = records.filter(r => r.status === 'present').length;
-      const totalCount = records.length || 1;
-      const rate = Math.round((presentCount / totalCount) * 100);
-      
-      return {
-        attendanceRate: rate,
-        totalPresent: presentCount,
-        lastCheckIn: records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.check_in
-      };
+      try {
+        const { data: records, error } = await supabase
+          .from('attendance')
+          .select('*')
+          .eq('staff_id', profile.staff_id)
+          .eq('approved', true);
+        
+        if (error) {
+          console.warn('[Dashboard] Failed to fetch personal stats:', error.message);
+          return { attendanceRate: 0, totalPresent: 0, lastCheckIn: null };
+        }
+        
+        const safeRecords = records || [];
+        const presentCount = safeRecords.filter(r => r.status === 'present').length;
+        const totalCount = safeRecords.length || 1;
+        const rate = Math.round((presentCount / totalCount) * 100);
+        
+        return {
+          attendanceRate: rate,
+          totalPresent: presentCount,
+          lastCheckIn: [...safeRecords].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.check_in || null
+        };
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching personal stats:', e.message);
+        return { attendanceRate: 0, totalPresent: 0, lastCheckIn: null };
+      }
     },
     enabled: userIsStaff && !!profile?.id,
   });
@@ -364,19 +480,27 @@ function DashboardPage() {
   const { data: allowanceSetting } = useQuery({
     queryKey: ['dashboard-allowance-setting'],
     queryFn: async () => {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-      const { data, error } = await supabase
-        .from('monthly_allowance_settings')
-        .select('amount')
-        .eq('month', month)
-        .eq('year', year)
-        .single();
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
+      try {
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        const { data, error } = await supabase
+          .from('monthly_allowance_settings')
+          .select('amount')
+          .eq('month', month)
+          .eq('year', year)
+          .single();
+        if (error && error.code !== 'PGRST116') {
+          console.warn('[Dashboard] Failed to fetch allowance setting:', error.message);
+          return { amount: 0 };
+        }
+        return data || { amount: 0 };
+      } catch (e: any) {
+        console.warn('[Dashboard] Exception fetching allowance setting:', e.message);
+        return { amount: 0 };
+      }
     },
-    enabled: !!profile && !userIsStaff,
+    enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
   const formatCurrency = (value: number) => {
@@ -404,7 +528,7 @@ function DashboardPage() {
     );
   }
 
-  const attendanceRate = staffStats?.total ? Math.round((attendanceStats?.presentToday || 0) / staffStats.total * 100) : 0;
+  const attendanceRate = staffStats?.total ? Math.round((attendanceStats?.presentToday || 0) / (staffStats.total || 1) * 100) : 0;
 
   return (
     <DashboardLayout>
@@ -416,7 +540,7 @@ function DashboardPage() {
             </h1>
             <p className="text-muted-foreground mt-1 flex items-center gap-2">
               <Activity className="h-4 w-4 text-primary" />
-              {userIsStaff ? "Here's your personal overview for today." : "Here's what's happening with GDU today."}
+              {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) ? "Here's what's happening with GDU today." : "Here's your personal overview for today."}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -424,7 +548,7 @@ function DashboardPage() {
               <Calendar className="mr-2 h-4 w-4" />
               {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </Button>
-            {!userIsStaff && (
+            {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) && (
               <Button size="sm" className="shadow-lg shadow-primary/20">
                 <TrendingUp className="mr-2 h-4 w-4" />
                 Generate Report
@@ -434,32 +558,32 @@ function DashboardPage() {
         </div>
 
         {/* Global Admin Stats */}
-        {!userIsStaff && (
+        {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
               title="Total Staff"
-              value={staffStats?.total.toString() || '0'}
+              value={staffStats?.total?.toString() || '0'}
               icon={Users}
               trend="+2.5%"
               description="from last month"
             />
             <StatCard
               title="Present Today"
-              value={attendanceStats?.presentToday.toString() || '0'}
+              value={attendanceStats?.presentToday?.toString() || '0'}
               icon={CheckCircle}
               trend={`${attendanceRate}%`}
               description="attendance rate"
             />
             <StatCard
               title="Absent Today"
-              value={attendanceStats?.absentToday.toString() || '0'}
+              value={attendanceStats?.absentToday?.toString() || '0'}
               icon={AlertCircle}
               variant="danger"
               description="Requires attention"
             />
             <StatCard
               title="Paid Allowances"
-              value={allowanceStats?.paid.toString() || '0'}
+              value={allowanceStats?.paid?.toString() || '0'}
               icon={Wallet}
               variant="success"
               description="Processed this month"
@@ -468,7 +592,7 @@ function DashboardPage() {
         )}
 
         {/* Monthly Allowance Management/Summary for Admin/Accountant/DG/etc */}
-        {!userIsStaff && (
+        {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
@@ -493,7 +617,7 @@ function DashboardPage() {
                 />
                 <StatCard
                   title="Total Present"
-                  value={personalStats?.totalPresent.toString() || '0'}
+                  value={personalStats?.totalPresent?.toString() || '0'}
                   icon={Activity}
                   description="Days recorded"
                 />
@@ -521,10 +645,10 @@ function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {myAllowances.length === 0 ? (
+                    {myAllowances?.length === 0 ? (
                       <p className="text-sm text-muted-foreground py-4 text-center">No allowances processed yet.</p>
                     ) : (
-                      myAllowances.map((item: any) => (
+                      (myAllowances || []).map((item: any) => (
                         <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/30 border border-muted/50">
                           <div className="flex items-center gap-3">
                             <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -579,11 +703,11 @@ function DashboardPage() {
           </div>
         )}
 
-        {!userIsStaff && (
+        {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <StatCard
               title="Pending Approvals"
-              value={pendingApprovals.length}
+              value={pendingApprovals?.length || 0}
               subtitle={isLoadingApprovals ? "Loading..." : "Awaiting your review"}
               icon={AlertCircle}
               variant="danger"
@@ -604,7 +728,7 @@ function DashboardPage() {
           </div>
         )}
 
-        {!userIsStaff && (
+        {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) && (
           <div className="grid gap-4 lg:grid-cols-2">
             <BarChartCard
               title="Weekly Attendance Overview"
@@ -627,7 +751,7 @@ function DashboardPage() {
           </div>
         )}
 
-        {!userIsStaff && (
+        {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) && (
           <div className="grid gap-4 lg:grid-cols-3">
             <AreaChartCard
               title="Monthly Payroll Trend"
@@ -653,10 +777,10 @@ function DashboardPage() {
                   <div className="space-y-4">
                     {isLoadingActivities ? (
                       <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
-                    ) : recentActivities.length === 0 ? (
+                    ) : (recentActivities || []).length === 0 ? (
                       <div className="text-center py-10 text-muted-foreground">No recent activity logged.</div>
                     ) : (
-                      recentActivities.map((activity) => (
+                      (recentActivities || []).map((activity) => (
                         <div key={activity.id} className="flex items-start gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarImage src={activity.avatar} />
@@ -682,22 +806,22 @@ function DashboardPage() {
         )}
 
         <div className="grid gap-4 lg:grid-cols-2">
-          {!userIsStaff && (
+          {(isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector) && (
             <Card className="border backdrop-blur-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-lg">Pending Approvals</CardTitle>
                 <Badge variant="secondary" className="bg-primary/10 text-primary">
-                  {pendingApprovals.length} pending
+                  {(pendingApprovals || []).length} pending
                 </Badge>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {isLoadingApprovals ? (
                     <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
-                  ) : pendingApprovals.length === 0 ? (
+                  ) : (pendingApprovals || []).length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">No pending approvals found.</div>
                   ) : (
-                    pendingApprovals.map((approval) => (
+                    (pendingApprovals || []).map((approval) => (
                       <div
                         key={approval.id}
                         className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"

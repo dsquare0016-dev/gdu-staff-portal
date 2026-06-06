@@ -46,24 +46,34 @@ export const handlePortalNotification = (
 export const handleDatabaseError = (error: any, action: string = 'save data') => {
   console.error(`Database Error during ${action}:`, error);
 
-  let userMessage = `Data could not be ${action === 'fetch' ? 'loaded from' : 'saved into'} the database.`;
-  let description = 'Please check your internet connection or database configuration.';
+  const isFetch = action.toLowerCase().includes('fetch') || action.toLowerCase().includes('load') || action.toLowerCase().includes('get');
+  let userMessage = `Data could not be ${isFetch ? 'loaded from' : 'saved into'} the database.`;
+  let description = error?.message || 'Please check your internet connection or database configuration.';
 
   if (error?.code === 'PGRST116') {
-    userMessage = 'No portal record found.';
-    description = 'The requested information does not exist.';
+    userMessage = 'Record not found.';
+    description = 'The requested information does not exist in the system.';
   } else if (error?.code === '42P01') {
-    userMessage = 'Data could not be processed because the database table is missing.';
-    description = 'Please contact the ICT department.';
+    userMessage = 'System database table missing.';
+    description = 'Please contact the ICT department to update the portal schema.';
+  } else if (error?.code === 'PGRST107') {
+    userMessage = 'Portal data relationship error.';
+    description = 'The system could not find a link between tables. Please contact your administrator.';
+  } else if (error?.code === '42703') {
+    userMessage = 'Database column missing.';
+    description = 'The portal is trying to access data that doesn\'t exist in the database. Please contact ICT.';
   } else if (error?.code === '23502') {
-    userMessage = 'Data could not be saved because required fields are empty.';
-    description = 'Please fill in all mandatory fields.';
+    userMessage = 'Required information missing.';
+    description = 'Please ensure all required fields are filled correctly.';
+  } else if (error?.code === '23505') {
+    userMessage = 'Duplicate record found.';
+    description = 'This information already exists in the system (e.g. same Email or Staff ID).';
   } else if (error?.code === '42501') {
-    userMessage = 'You do not have permission to perform this portal action.';
-    description = 'Access denied by security policy.';
+    userMessage = 'Permission denied.';
+    description = 'Your account does not have the required permissions for this action. Please contact your supervisor.';
   } else if (error?.message?.includes('network') || error?.message?.includes('fetch')) {
-    userMessage = 'Connection error.';
-    description = 'Unable to connect to the database. Check your internet.';
+    userMessage = 'Network connection error.';
+    description = 'Unable to connect to the portal servers. Please check your internet connection.';
   }
 
   handlePortalNotification(userMessage, {

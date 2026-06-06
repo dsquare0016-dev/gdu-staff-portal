@@ -14,7 +14,7 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { profile, loading, isSuperAdmin } = useAuth();
+  const { profile, loading, isSuperAdmin, authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mounted, setMounted] = useState(false);
@@ -25,12 +25,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     setMounted(true);
     const timer = setTimeout(() => {
       if (loading) setShowError(true);
-    }, 8000);
+    }, 20000); // Increased to 20s for better tolerance on external/slow connections
     return () => clearTimeout(timer);
   }, [loading]);
 
   useEffect(() => {
-    if (mounted && !loading && !profile) {
+    if (mounted && !loading && !profile && !authError) {
       navigate({ to: '/' });
       return;
     }
@@ -41,8 +41,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       // Strict RBAC enforcement
       const restrictions: Record<string, string[]> = {
-        'dg': ['/dashboard/staff', '/dashboard/payroll', '/dashboard/settings'],
-        'ta': ['/dashboard/staff', '/dashboard/payroll', '/dashboard/settings'],
+        'dg': ['/dashboard/settings'],
+        'technical_assistant': ['/dashboard/settings'],
         'accounts': ['/dashboard/staff', '/dashboard/settings'],
         'admin': ['/dashboard/settings/branding', '/dashboard/settings/roles'],
         'staff': ['/dashboard/staff', '/dashboard/payroll', '/dashboard/settings'],
@@ -57,12 +57,35 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         toast.error("Invalid User Role Selected. Please ensure you selected the proper role for this login.");
       }
     }
-  }, [mounted, loading, profile, navigate, location.pathname, isSuperAdmin]);
+  }, [mounted, loading, profile, authError, navigate, location.pathname, isSuperAdmin]);
 
   if (!mounted || (loading && !showError)) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <PortalLoader />
+      </div>
+    );
+  }
+
+  if (authError && !profile) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background p-6">
+        <div className="flex flex-col items-center gap-6 max-w-md text-center">
+          <div className="h-20 w-20 rounded-full bg-destructive/10 flex items-center justify-center">
+            <ShieldAlert className="h-10 w-10 text-destructive" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight text-destructive">Authentication Error</h2>
+            <p className="text-muted-foreground">
+              {authError}
+            </p>
+          </div>
+          <div className="flex flex-col w-full gap-2">
+            <Button onClick={() => window.location.href = '/'} variant="default">
+              Back to Login
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

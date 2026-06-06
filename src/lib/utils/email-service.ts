@@ -4,6 +4,7 @@ interface WelcomeEmailParams {
   fullName: string;
   staffId: string;
   email: string;
+  password?: string;
   role: string;
   portalUrl: string;
 }
@@ -12,7 +13,7 @@ interface WelcomeEmailParams {
  * Simulates sending a welcome email to a newly registered staff member.
  * In a real production app, this would use a service like SendGrid, Resend, or AWS SES via a Supabase Edge Function.
  */
-export async function sendWelcomeEmail({ fullName, staffId, email, role, portalUrl }: WelcomeEmailParams) {
+export async function sendWelcomeEmail({ fullName, staffId, email, password, role, portalUrl }: WelcomeEmailParams) {
   console.log(`[Email Service] Sending welcome email to ${email}`);
   
   const template = `
@@ -25,10 +26,11 @@ export async function sendWelcomeEmail({ fullName, staffId, email, role, portalU
     ----------------
     Staff ID: ${staffId}
     Email/Username: ${email}
+    ${password ? `Temporary Password: ${password}` : ''}
     Role: ${role.toUpperCase()}
     Portal URL: ${portalUrl}
 
-    Please use the "Forgot Password" feature on the login page to set your initial password.
+    ${password ? 'Please log in and change your password in the Security settings.' : 'Please use the "Forgot Password" feature on the login page to set your initial password.'}
 
     Best regards,
     GDU Administration

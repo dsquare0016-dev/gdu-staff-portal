@@ -66,9 +66,9 @@ export function MonthlyAllowanceAccountant() {
   useEffect(() => {
     if (settings) {
       setAmount(settings.amount?.toString() || '');
-      setMinAttendance(settings.minimum_attendance_percentage?.toString() || '80');
-      setSelectedRoles(settings.eligible_roles?.map((r: any) => r.role_id) || []);
-      setSelectedDepts(settings.eligible_departments?.map((d: any) => d.department_id) || []);
+      setMinAttendance(settings.attendance_threshold?.toString() || '80');
+      setSelectedRoles(settings.eligible_roles || []);
+      setSelectedDepts(settings.eligible_departments || []);
     }
   }, [settings]);
 
@@ -100,7 +100,7 @@ export function MonthlyAllowanceAccountant() {
     updateSettings.mutate({
       amount: amt,
       minAttendance: minAtt,
-      roleIds: selectedRoles,
+      roles: selectedRoles,
       deptIds: selectedDepts
     });
   };
@@ -119,9 +119,9 @@ export function MonthlyAllowanceAccountant() {
     setRejectDialog({ open: false, requestId: '', reason: '' });
   };
 
-  const toggleRole = (roleId: string) => {
+  const toggleRole = (roleSlug: string) => {
     setSelectedRoles(prev => 
-      prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]
+      prev.includes(roleSlug) ? prev.filter(s => s !== roleSlug) : [...prev, roleSlug]
     );
   };
 
@@ -198,11 +198,11 @@ export function MonthlyAllowanceAccountant() {
                   {roles?.map(role => (
                     <div key={role.id} className="flex items-center space-x-2">
                       <Checkbox 
-                        id={`role-${role.id}`} 
-                        checked={selectedRoles.includes(role.id)}
-                        onCheckedChange={() => toggleRole(role.id)}
+                        id={`role-${role.slug}`} 
+                        checked={selectedRoles.includes(role.slug)}
+                        onCheckedChange={() => toggleRole(role.slug)}
                       />
-                      <label htmlFor={`role-${role.id}`} className="text-xs font-medium cursor-pointer">{role.name}</label>
+                      <label htmlFor={`role-${role.slug}`} className="text-xs font-medium cursor-pointer">{role.name}</label>
                     </div>
                   ))}
                   {(!roles || roles.length === 0) && <p className="text-xs text-muted-foreground italic col-span-2">No roles found</p>}

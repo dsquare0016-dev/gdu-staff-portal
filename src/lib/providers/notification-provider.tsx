@@ -11,13 +11,14 @@ interface NotificationProviderProps {
 const NotificationContext = createContext<undefined>(undefined);
 
 export function NotificationProvider({ children }: NotificationProviderProps) {
-  const { user } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  const userId = user?.id;
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId || !profile || authLoading) return;
 
-    const channelName = `notifications-global:${user.id}`;
+    const channelName = `notifications-global:${userId}`;
     
     const channel = supabase
       .channel(channelName)
@@ -27,16 +28,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
+          filter: `user_id=eq.${userId}`,
         },
         (payload) => {
           const newNotif = payload.new as any;
           
           // Manually update the query cache for immediate feedback
-          queryClient.setQueryData(['notifications', user.id], (old: any[] = []) => [newNotif, ...old]);
+          queryClient.setQueryData(['notifications', userId], (old: any[] = []) => [newNotif, ...old]);
           
           // Also invalidate to ensure data consistency with server-side defaults/transforms
-          queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+          queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
           
           // Show toast for new notification
           toast(newNotif.title, {
@@ -46,15 +47,15 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log(`[Realtime] Subscribed to notifications for user ${user.id}`);
+          console.log(`[Realtime] Subscribed to notifications for user ${userId}`);
         }
       });
 
     return () => {
-      console.log(`[Realtime] Unsubscribing from notifications for user ${user.id}`);
+      console.log(`[Realtime] Unsubscribing from notifications for user ${userId}`);
       supabase.removeChannel(channel);
     };
-  }, [user, queryClient]);
+  }, [userId, queryClient]);
 
   return (
     <NotificationContext.Provider value={undefined}>

@@ -48,7 +48,8 @@ export function MonthlyAllowanceSummary() {
 
       // Group by staff_id
       const staffAttendance: Record<string, { total: number, present: number }> = {};
-      attendance?.forEach(record => {
+      const safeAttendance = attendance || [];
+      safeAttendance.forEach(record => {
         if (!staffAttendance[record.staff_id]) {
           staffAttendance[record.staff_id] = { total: 0, present: 0 };
         }

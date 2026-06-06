@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
@@ -73,7 +74,8 @@ import {
 import { QRScanner } from '@/components/attendance/qr-scanner';
 import { QRGenerator } from '@/components/attendance/qr-generator';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { exportToPDF, exportToExcel } from '@/lib/utils/export';
+import { useBranding } from '@/lib/hooks/use-branding';
 import { toast } from 'sonner';
 import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
 import { PortalLoader } from '@/components/ui/portal-loader';
@@ -116,7 +118,7 @@ function AttendancePage() {
         .from('staff_records')
         .select('id, full_name, position')
         .eq('readable_id', manualStaffId.trim().toUpperCase())
-        .single();
+        .maybeSingle();
 
       if (staffError || !staff) {
         throw new Error('Staff record not found with ID: ' + manualStaffId);
@@ -131,7 +133,7 @@ function AttendancePage() {
         .select('id')
         .eq('staff_id', staff.id)
         .eq('date', today)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         // Update check-out
@@ -154,7 +156,6 @@ function AttendancePage() {
             date: today,
             check_in: now.toISOString(),
             status: now.getHours() >= 9 && now.getMinutes() > 0 ? 'late' : 'present',
-            method: 'manual'
           }]);
 
         if (insertError) throw insertError;
@@ -248,8 +249,8 @@ function AttendancePage() {
   });
 
   const handleVerify = async (record: any) => {
-    // Skip verification/approval requirement for TA, DG, ICT
-    const skipApprovalRoles = ['ta', 'dg', 'ict'];
+    // Skip verification/approval requirement for Technical Assistant, DG, ICT
+    const skipApprovalRoles = ['technical_assistant', 'dg', 'ict'];
     const needsApproval = !skipApprovalRoles.includes(record.staff?.role || '');
     
     updateAttendanceMutation.mutate({
@@ -334,14 +335,46 @@ function AttendancePage() {
     handlePortalNotification(`Attendance for ${record.staff?.full_name} approved`, { severity: 'success' });
   };
 
-  const filteredAttendance = attendanceRecords.filter((record) => {
+  const { data: branding } = useBranding();
+
+  const handleExport = (format: 'pdf' | 'excel') => {
+    const headers = ['Staff Name', 'Department', 'Check In', 'Check Out', 'Status', 'Date'];
+    const exportData = filteredAttendance.map(record => ({
+      staff_name: record.staff?.full_name || 'N/A',
+      department: record.staff?.department?.name || 'N/A',
+      check_in: record.check_in ? format(new Date(record.check_in), 'HH:mm') : '-',
+      check_out: record.check_out ? format(new Date(record.check_out), 'HH:mm') : '-',
+      status: record.status,
+      date: format(new Date(record.date), 'PPP')
+    }));
+
+    if (format === 'pdf') {
+      exportToPDF({
+        data: exportData,
+        filename: `Attendance_Report_${date ? format(date, 'yyyy-MM-dd') : 'All'}`,
+        title: `Attendance Report - ${date ? format(date, 'PPPP') : 'All Dates'}`,
+        headers,
+        generatedBy: profile?.full_name,
+        branding
+      });
+    } else {
+      exportToExcel({
+        data: exportData,
+        filename: `Attendance_Report_${date ? format(date, 'yyyy-MM-dd') : 'All'}`,
+        title: `Attendance Report - ${date ? format(date, 'PPPP') : 'All Dates'}`,
+        branding
+      });
+    }
+  };
+
+  const filteredAttendance = (attendanceRecords || []).filter((record) => {
     const staffName = record.staff?.full_name || '';
     const staffEmail = record.staff?.email || '';
     const staffDept = record.staff?.department?.name || '';
 
     const matchesSearch =
-      staffName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      staffEmail.toLowerCase().includes(searchQuery.toLowerCase());
+      (staffName || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (staffEmail || '').toLowerCase().includes((searchQuery || '').toLowerCase());
     
     const matchesDepartment =
       departmentFilter === 'All Departments' || staffDept === departmentFilter;
@@ -383,13 +416,13 @@ function AttendancePage() {
   };
 
   const todayStats = {
-    present: attendanceRecords.filter((r) => r.status === 'present').length,
-    absent: attendanceRecords.filter((r) => r.status === 'absent').length,
-    late: attendanceRecords.filter((r) => r.status === 'late').length,
-    onLeave: attendanceRecords.filter((r) => r.status === 'leave').length,
+    present: (attendanceRecords || []).filter((r) => r.status === 'present').length,
+    absent: (attendanceRecords || []).filter((r) => r.status === 'absent').length,
+    late: (attendanceRecords || []).filter((r) => r.status === 'late').length,
+    onLeave: (attendanceRecords || []).filter((r) => r.status === 'leave').length,
   };
 
-  const totalRecords = attendanceRecords.length || 1;
+  const totalRecords = (attendanceRecords || []).length || 1;
   const presentRate = Math.round((todayStats.present / totalRecords) * 100);
 
   const formatTime = (isoString: string | null) => {
@@ -488,10 +521,26 @@ function AttendancePage() {
               </Dialog>
             </>
           )}
-            <Button variant="outline" className="rounded-xl">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="rounded-xl gap-2">
+                  <Download className="h-4 w-4" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl">
+                <DropdownMenuLabel>Export Options</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-2 cursor-pointer">
+                  <FileText className="h-4 w-4 text-red-500" />
+                  Export as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2 cursor-pointer">
+                  <FileText className="h-4 w-4 text-green-500" />
+                  Export as Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -820,12 +869,22 @@ function AttendancePage() {
                   Generate and download attendance reports
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col items-center justify-center p-8 text-center">
-                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <Button>
-                  <Download className="mr-2 h-4 w-4" />
-                  Generate Report
-                </Button>
+              <CardContent className="flex flex-col items-center justify-center p-8 text-center space-y-4">
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                <div className="space-y-1">
+                  <h3 className="font-bold">Generate Daily Attendance Report</h3>
+                  <p className="text-sm text-muted-foreground">Download a detailed report for {date ? format(date, 'PPP') : 'today'}</p>
+                </div>
+                <div className="flex gap-3">
+                  <Button onClick={() => handleExport('pdf')} className="rounded-xl gap-2">
+                    <Download className="h-4 w-4" />
+                    Download PDF
+                  </Button>
+                  <Button onClick={() => handleExport('excel')} variant="outline" className="rounded-xl gap-2">
+                    <Download className="h-4 w-4" />
+                    Download Excel
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -893,7 +952,6 @@ function AttendanceForm({ onSuccess }: { onSuccess: () => void }) {
           staff_id: selectedStaff,
           date: today,
           status: attendanceStatus,
-          method: method,
           check_in: attendanceStatus === 'present' ? new Date().toISOString() : null,
           verified: false, // Needs admin verification as per requirement
           approved: false,

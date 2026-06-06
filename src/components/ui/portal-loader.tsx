@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import gduLogo from "@/assets/images/logos/gdu-logo.png";
 
 interface PortalLoaderProps {
   className?: string;
@@ -39,7 +40,7 @@ export function PortalLoader({
       <div className="relative">
         <div className="absolute inset-0 bg-primary/20 rounded-full blur-2xl animate-pulse" />
         <img 
-          src={branding?.logo_url || "/logo.png"} 
+          src={branding?.logo_url || gduLogo} 
           alt="GDU Logo" 
           className={cn(sizeClasses[size], "object-contain animate-bubble relative z-10")}
         />

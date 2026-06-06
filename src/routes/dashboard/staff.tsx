@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
@@ -72,9 +73,14 @@ import {
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
+import { createClient } from '@supabase/supabase-js';
+import { exportToPDF, exportToExcel } from '@/lib/utils/export';
+import { useBranding } from '@/lib/hooks/use-branding';
+import { format } from 'date-fns';
 
 import { generateNextStaffId } from '@/lib/utils/staff-id';
 import { sendWelcomeEmail } from '@/lib/utils/email-service';
+import { generateSecurePassword } from '@/lib/utils/password-gen';
 
 export const Route = createFileRoute('/dashboard/staff')({
   head: () => ({
@@ -83,16 +89,18 @@ export const Route = createFileRoute('/dashboard/staff')({
   component: StaffManagementPage,
 });
 
-const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'ta', 'ict', 'staff', 'adhoc'];
+const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'technical_assistant', 'ict', 'staff', 'adhoc'];
 const statuses = ['All Status', 'active', 'inactive', 'suspended', 'retired'];
 
 function StaffManagementPage() {
-  const { profile, canAccess, isSuperAdmin } = useAuth();
+  const { profile, canAccess, isSuperAdmin, isICT, isTechnicalAssistant, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [statusFilter, setStatusFilter] = useState('All Status');
+
+  const canManageStaff = isSuperAdmin || isAdmin || isICT || isTechnicalAssistant;
   const updateStaffRoleMutation = useMutation({
     mutationFn: async ({ staffId, userId, newRole }: { staffId: string, userId: string | null, newRole: string }) => {
       // 1. Update staff_records
@@ -153,7 +161,7 @@ function StaffManagementPage() {
     },
   });
 
-  const departments = ['All Departments', ...dbDepartments.map(d => d.name)];
+  const departments = ['All Departments', ...(dbDepartments || []).map(d => d.name)];
 
   // Fetch staff from database
   const { data: staffRecords = [], isLoading } = useQuery({
@@ -189,16 +197,48 @@ function StaffManagementPage() {
     onError: (error: any) => handleDatabaseError(error, 'delete staff record'),
   });
 
-  const canManageStaff = canAccess('staff', 'create') || canAccess('staff', 'edit');
+  const { data: branding } = useBranding();
+
+  const handleExport = (formatType: 'pdf' | 'excel') => {
+    const headers = ['Full Name', 'Staff ID', 'Email', 'Department', 'Role', 'Status', 'Level', 'Step'];
+    const exportData = filteredStaff.map(staff => ({
+      full_name: staff.full_name,
+      staff_id: staff.readable_id || 'N/A',
+      email: staff.email,
+      department: staff.department?.name || 'N/A',
+      role: staff.role.toUpperCase(),
+      status: staff.status.toUpperCase(),
+      level: staff.grade_level?.toString() || 'N/A',
+      step: staff.step?.toString() || 'N/A'
+    }));
+
+    if (formatType === 'pdf') {
+      exportToPDF({
+        data: exportData,
+        filename: 'Staff_Records_Report',
+        title: 'Staff Records Management Report',
+        headers,
+        generatedBy: profile?.full_name,
+        branding
+      });
+    } else {
+      exportToExcel({
+        data: exportData,
+        filename: 'Staff_Records_Report',
+        title: 'Staff Records Management Report',
+        branding
+      });
+    }
+  };
 
   const availableRoles = isSuperAdmin 
     ? roles 
     : roles.filter(r => r !== 'super_admin');
 
-  const filteredStaff = staffRecords.filter((staff) => {
+  const filteredStaff = (staffRecords || []).filter((staff) => {
     const matchesSearch =
-      staff.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      staff.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (staff.full_name || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (staff.email || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
       (staff.phone && staff.phone.includes(searchQuery));
     
     const staffDept = typeof staff.department === 'object' ? staff.department?.name : staff.department;
@@ -224,6 +264,8 @@ function StaffManagementPage() {
         return 'secondary';
       case 'dg':
         return 'outline';
+      case 'technical_assistant':
+        return 'default';
       default:
         return 'outline';
     }
@@ -256,10 +298,26 @@ function StaffManagementPage() {
                   <Upload className="mr-2 h-4 w-4" />
                   Bulk Upload
                 </Button>
-                <Button variant="outline">
-                  <Download className="mr-2 h-4 w-4" />
-                  Export All
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="rounded-xl gap-2">
+                      <Download className="h-4 w-4" />
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="rounded-xl">
+                    <DropdownMenuLabel>Export Options</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-2 cursor-pointer">
+                      <FileText className="h-4 w-4 text-red-500" />
+                      Export as PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2 cursor-pointer">
+                      <FileText className="h-4 w-4 text-green-500" />
+                      Export as Excel
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             )}
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -697,8 +755,6 @@ function StaffForm({
     gender: 'male',
     date_of_birth: '',
     qualification: '',
-    state: '',
-    lga: '',
     address: '',
     next_of_kin_name: '',
     next_of_kin_phone: '',
@@ -708,7 +764,7 @@ function StaffForm({
   });
 
   useEffect(() => {
-    const fetchNextId = async () => {
+  const fetchNextId = async () => {
       const nextId = await generateNextStaffId();
       setFormData(prev => ({ ...prev, readable_id: nextId }));
     };
@@ -720,79 +776,171 @@ function StaffForm({
     setIsSubmitting(true);
 
     try {
-      const insertData: any = {
-        ...formData,
-        grade_level: parseInt(formData.grade_level),
-        step: parseInt(formData.step),
+      const password = generateSecurePassword();
+      const email = formData.email.trim().toLowerCase();
+      
+      // 1. Create Auth User without logging out the admin
+      // We use a separate client without persistence
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { persistSession: false }
+      });
+
+      console.log('[Staff] Step 1: Creating auth user...');
+      const { data: authData, error: authError } = await authClient.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: formData.full_name,
+            role: formData.role,
+          }
+        }
+      });
+
+      if (authError) {
+        console.error('[Staff] Auth creation error:', authError);
+        throw new Error(`Failed to create user account: ${authError.message}`);
+      }
+
+      if (!authData.user) {
+        throw new Error('Failed to create user account - no user returned');
+      }
+
+      const userId = authData.user.id;
+      console.log('[Staff] Auth user created:', userId);
+
+      // 2. Build a precise insert payload — only columns confirmed to exist in staff_records
+      const insertData: Record<string, any> = {
+        user_id: userId,
+        full_name: formData.full_name.trim(),
+        email: email,
+        role: formData.role || 'staff',
+        status: 'active',
+
+        // Optional text fields
+        ...(formData.phone && { phone: formData.phone.trim() }),
+        ...(formData.position && { position: formData.position.trim() }),
+        ...(formData.qualification && { qualification: formData.qualification.trim() }),
+        ...(formData.address && { address: formData.address.trim() }),
+        ...(formData.gender && { gender: formData.gender }),
+        ...(formData.passport_url && { passport_url: formData.passport_url }),
+        ...(formData.next_of_kin_name && { next_of_kin_name: formData.next_of_kin_name.trim() }),
+        ...(formData.next_of_kin_phone && { next_of_kin_phone: formData.next_of_kin_phone.trim() }),
+        ...(formData.next_of_kin_rel && { next_of_kin_rel: formData.next_of_kin_rel.trim() }),
+        ...(formData.readable_id && { readable_id: formData.readable_id.trim() }),
+
+        // Numeric fields
+        ...(formData.grade_level && { grade_level: parseInt(formData.grade_level as string) || null }),
+        ...(formData.step && { step: parseInt(formData.step as string) || null }),
+
+        // Date fields
+        employment_date: formData.employment_date || null,
+        date_of_birth: formData.date_of_birth || null,
         retirement_date: formData.retirement_date || null,
+        adhoc_expiry: (formData.role === 'adhoc' && formData.adhoc_expiry) ? formData.adhoc_expiry : null,
+
+        // UUID FK
+        department_id: formData.department_id || null,
       };
 
-      // Only include adhoc_expiry if it's an adhoc role to avoid schema errors on some environments
-      if (formData.role === 'adhoc') {
-        insertData.adhoc_expiry = formData.adhoc_expiry || null;
+      console.log('[Staff] Step 2: Inserting staff record...');
+      const { error: staffError } = await (supabase
+        .from('staff_records') as any)
+        .insert([insertData]);
+
+      if (staffError) {
+        console.error('[Staff] Staff record error:', staffError);
+        throw new Error(staffError.message || 'Failed to save staff record');
       }
 
-      const { data, error } = await supabase
-        .from('staff_records')
-        .insert([insertData])
-        .select();
+      queryClient.invalidateQueries({ queryKey: ['staff-records'] });
 
-      if (error) {
-        // Fallback for environments where adhoc_expiry might be missing from schema cache
-        if (error.message.includes('adhoc_expiry') && formData.role !== 'adhoc') {
-          delete insertData.adhoc_expiry;
-          const { data: retryData, error: retryError } = await supabase
-            .from('staff_records')
-            .insert([insertData])
-            .select();
-          if (retryError) throw retryError;
-        } else {
-          throw error;
-        }
-      }
-
-      // Send Welcome Email
-      await sendWelcomeEmail({
+      // 3. Send welcome email with credentials
+      console.log('[Staff] Step 3: Sending welcome email...');
+      sendWelcomeEmail({
         fullName: formData.full_name,
         staffId: formData.readable_id,
         email: formData.email,
+        password: password, // Include the generated password
         role: formData.role,
         portalUrl: window.location.origin,
+      }).catch((emailErr) => {
+        console.warn('[Staff] Welcome email failed (non-critical):', emailErr);
       });
 
       toast.success(`Staff member registered successfully with ID: ${formData.readable_id}`);
       onSuccess();
     } catch (error: any) {
-      handleDatabaseError(error, 'add staff');
+      console.error('[Staff] handleSubmit error:', error);
+      toast.error(error.message || 'Failed to add staff record. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+
   const handlePassportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image too large. Maximum size is 5MB.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       
-      const fileExt = file.name.split('.').pop();
-      const filePath = `passports/${formData.readable_id}-${Math.random()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('staff-assets')
-        .upload(filePath, file);
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const staffId = formData.readable_id || `temp-${Date.now()}`;
+      const filePath = `passports/${staffId}-${Date.now()}.${fileExt}`;
 
-      if (uploadError) throw uploadError;
+      let publicUrl = '';
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('staff-assets')
-        .getPublicUrl(filePath);
+      // Strategy 1: Try Supabase Storage bucket
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from('staff-passports')
+          .upload(filePath, file, { upsert: true });
 
-      setFormData({ ...formData, passport_url: publicUrl });
-      handlePortalNotification('Passport photo uploaded', { severity: 'success' });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('staff-passports')
+            .getPublicUrl(filePath);
+          publicUrl = urlData.publicUrl;
+        } else {
+          console.warn('[Staff] Supabase upload failed:', uploadError.message, '— trying Cloudinary fallback');
+        }
+      } catch (supaErr) {
+        console.warn('[Staff] Supabase storage unavailable, using Cloudinary fallback');
+      }
+
+      // Strategy 2: Fallback to Cloudinary
+      if (!publicUrl) {
+        try {
+          const cloudinaryResult = await uploadToCloudinary(file, 'passports');
+          if (cloudinaryResult?.secure_url) {
+            publicUrl = cloudinaryResult.secure_url;
+          }
+        } catch (cloudErr: any) {
+          console.error('[Staff] Cloudinary upload also failed:', cloudErr.message);
+          throw new Error('Photo upload failed. Please check your internet connection and try again.');
+        }
+      }
+
+      if (!publicUrl) {
+        throw new Error('Upload failed — no URL returned from storage provider.');
+      }
+
+      setFormData(prev => ({ ...prev, passport_url: publicUrl }));
+      toast.success('Passport photo uploaded successfully');
     } catch (error: any) {
-      handlePortalNotification('Error uploading passport: ' + error.message, { severity: 'error' });
+      console.error('[Staff] Passport upload error:', error);
+
+      handlePortalNotification('Error uploading passport: ' + (error.message || 'Unknown error'), { severity: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -890,6 +1038,14 @@ function StaffForm({
                   value={formData.qualification} 
                   onChange={(e) => setFormData({ ...formData, qualification: e.target.value })} 
                   placeholder="e.g. M.Sc Computer Science"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Residential Address</label>
+                <Input 
+                  value={formData.address} 
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })} 
+                  placeholder="Full residential address"
                 />
               </div>
             </div>

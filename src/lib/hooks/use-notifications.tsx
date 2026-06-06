@@ -32,7 +32,7 @@ export function useNotifications() {
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { descending: true });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as Notification[];

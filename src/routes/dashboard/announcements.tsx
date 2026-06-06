@@ -69,8 +69,8 @@ function AnnouncementsPage() {
       const { data, error } = await supabase
         .from('announcements')
         .select('*, posted_by_profile:profiles!announcements_posted_by_fkey(full_name, avatar_url)')
-        .order('is_pinned', { descending: true })
-        .order('created_at', { descending: true });
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },

@@ -23,6 +23,8 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handler';
+import { exportToPDF, exportToExcel } from '@/lib/utils/export';
+import { useBranding } from '@/lib/hooks/use-branding';
 import { format } from 'date-fns';
 import { 
   Dialog, 
@@ -40,12 +42,45 @@ export const Route = createFileRoute('/dashboard/allowances')({
 });
 
 function AllowancesPage() {
-  const { profile, isAccounts, isSuperAdmin, isDirector, isAdmin } = useAuth();
+  const { profile, isAccounts, isSuperAdmin, isDirector, isAdmin, isTechnicalAssistant } = useAuth();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const canManage = isAccounts || isSuperAdmin;
+  const canManage = isSuperAdmin || isAccounts || isAdmin || isTechnicalAssistant;
+  
+  const { data: branding } = useBranding();
+
+  const handleExport = (formatType: 'pdf' | 'excel') => {
+    const headers = ['Staff Name', 'Staff ID', 'Type', 'Amount', 'Month/Year', 'Date', 'Status'];
+    const exportData = allowances.map(item => ({
+      staff_name: item.staff_records?.full_name || 'N/A',
+      staff_id: item.staff_records?.readable_id || 'N/A',
+      type: item.allowance_type,
+      amount: `₦${item.amount.toLocaleString()}`,
+      'month/year': `${format(new Date(2024, item.month-1), 'MMMM')} ${item.year}`,
+      date: format(new Date(item.payment_date), 'PPP'),
+      status: item.payment_status.toUpperCase()
+    }));
+
+    if (formatType === 'pdf') {
+      exportToPDF({
+        data: exportData,
+        filename: 'Allowances_Report',
+        title: 'Staff Allowances & Payments Report',
+        headers,
+        generatedBy: profile?.full_name,
+        branding
+      });
+    } else {
+      exportToExcel({
+        data: exportData,
+        filename: 'Allowances_Report',
+        title: 'Staff Allowances & Payments Report',
+        branding
+      });
+    }
+  };
 
   const { data: allowances = [], isLoading } = useQuery({
     queryKey: ['allowances'],
@@ -53,7 +88,7 @@ function AllowancesPage() {
       let query = supabase
         .from('allowances')
         .select('*, staff_records:staff_id(full_name, readable_id)')
-        .order('created_at', { descending: true });
+        .order('created_at', { ascending: false });
 
       if (!isSuperAdmin && !isAccounts && !isDirector && !isAdmin) {
         query = query.eq('staff_id', profile?.staff_id);
@@ -146,83 +181,106 @@ function AllowancesPage() {
             </p>
           </div>
           
-          {canManage && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2 rounded-xl shadow-lg shadow-primary/20">
-                  <Plus className="h-4 w-4" />
-                  Process New Allowance
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="rounded-xl gap-2">
+                  <Download className="h-4 w-4" />
+                  Export
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md rounded-2xl">
-                <DialogHeader>
-                  <DialogTitle>Process Allowance</DialogTitle>
-                  <DialogDescription>Assign a new allowance to a staff member.</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Select Staff</Label>
-                    <Select onValueChange={(v) => setFormData({ ...formData, staff_id: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select Staff" /></SelectTrigger>
-                      <SelectContent>
-                        {staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name} ({s.readable_id})</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Allowance Type</Label>
-                    <Select onValueChange={(v) => setFormData({ ...formData, allowance_type: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Housing">Housing</SelectItem>
-                        <SelectItem value="Transport">Transport</SelectItem>
-                        <SelectItem value="Medical">Medical</SelectItem>
-                        <SelectItem value="Wardrobe">Wardrobe</SelectItem>
-                        <SelectItem value="Leave">Leave</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl">
+                <DropdownMenuLabel>Export Options</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-2 cursor-pointer">
+                  <FileText className="h-4 w-4 text-red-500" />
+                  Export as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2 cursor-pointer">
+                  <FileText className="h-4 w-4 text-green-500" />
+                  Export as Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {canManage && (
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2 rounded-xl shadow-lg shadow-primary/20">
+                    <Plus className="h-4 w-4" />
+                    Process New Allowance
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md rounded-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Process Allowance</DialogTitle>
+                    <DialogDescription>Assign a new allowance to a staff member.</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label>Month</Label>
-                      <Select defaultValue={formData.month.toString()} onValueChange={(v) => setFormData({ ...formData, month: parseInt(v) })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      <Label>Select Staff</Label>
+                      <Select onValueChange={(v) => setFormData({ ...formData, staff_id: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select Staff" /></SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                            <SelectItem key={m} value={m.toString()}>{format(new Date(2024, m-1), 'MMMM')}</SelectItem>
-                          ))}
+                          {staffList.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name} ({s.readable_id})</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Year</Label>
-                      <Input type="number" value={formData.year} onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })} />
+                      <Label>Allowance Type</Label>
+                      <Select onValueChange={(v) => setFormData({ ...formData, allowance_type: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select Type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Housing">Housing</SelectItem>
+                          <SelectItem value="Transport">Transport</SelectItem>
+                          <SelectItem value="Medical">Medical</SelectItem>
+                          <SelectItem value="Wardrobe">Wardrobe</SelectItem>
+                          <SelectItem value="Leave">Leave</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Amount (₦)</Label>
-                    <Input required type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} placeholder="0.00" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Payment Date</Label>
-                    <Input required type="date" value={formData.payment_date} onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Notes (Optional)</Label>
-                    <Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Additional details..." />
-                  </div>
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                      Confirm Payment
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Month</Label>
+                        <Select defaultValue={formData.month.toString()} onValueChange={(v) => setFormData({ ...formData, month: parseInt(v) })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                              <SelectItem key={m} value={m.toString()}>{format(new Date(2024, m-1), 'MMMM')}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Year</Label>
+                        <Input type="number" value={formData.year} onChange={(e) => setFormData({ ...formData, year: parseInt(e.target.value) })} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Amount (₦)</Label>
+                      <Input required type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Payment Date</Label>
+                      <Input required type="date" value={formData.payment_date} onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Notes (Optional)</Label>
+                      <Input value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Additional details..." />
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                        Confirm Payment
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-4">

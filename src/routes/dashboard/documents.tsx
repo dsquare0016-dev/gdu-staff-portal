@@ -94,6 +94,11 @@ function DocumentsPage() {
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
     queryFn: async () => {
+      if (!profile?.id) {
+        console.warn('[Documents] No profile ID available for query');
+        return [];
+      }
+
       let query = supabase
         .from('documents')
         .select(`
@@ -101,11 +106,15 @@ function DocumentsPage() {
           staff:staff_records(full_name),
           category:document_categories(name)
         `)
-        .order('created_at', { descending: true });
+        .order('created_at', { ascending: false });
 
       // Non-privileged users only see their own docs
       if (!isSuperAdmin && !canAccess('documents', 'view_all')) {
-        query = query.eq('staff_id', profile?.staff_id);
+        if (!profile.staff_id) {
+          console.warn('[Documents] No staff ID for personal query');
+          return [];
+        }
+        query = query.eq('staff_id', profile.staff_id);
       }
 
       const { data, error } = await query;
@@ -559,6 +568,10 @@ function DocumentUploadForm({ onSuccess }: { onSuccess: () => void }) {
 
     setIsUploading(true);
     try {
+      if (!profile?.id) {
+        throw new Error('User profile not loaded. Please refresh and try again.');
+      }
+
       // 1. Upload to Cloudinary
       const res = await uploadToCloudinary(file, 'documents');
 

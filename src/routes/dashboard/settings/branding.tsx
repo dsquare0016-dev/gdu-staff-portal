@@ -51,33 +51,72 @@ function BrandingSettings() {
     login_title: '',
     login_subtitle: '',
     logo_url: '',
+    logo_url_2: '',
+    logo_url_3: '',
     favicon_url: '',
     login_background_url: '',
+    hero_title: '',
+    hero_subtitle: '',
+    hero_tagline: '',
   });
 
   useEffect(() => {
-    if (branding) {
-      setFormData({
-        portal_name: branding.portal_name || '',
-        primary_color: branding.primary_color || '',
-        secondary_color: branding.secondary_color || '',
-        footer_text: branding.footer_text || '',
-        login_title: branding.login_title || '',
-        login_subtitle: branding.login_subtitle || '',
-        logo_url: branding.logo_url || '',
-        favicon_url: branding.favicon_url || '',
-        login_background_url: branding.login_background_url || '',
-      });
-    }
+    const fetchFullBranding = async () => {
+      if (branding) {
+        let fullBranding = { ...branding };
+        
+        // Try to get more logos from branding_settings if available
+        try {
+          const { data: bData } = await supabase
+            .from('branding_settings')
+            .select('logo_url_2, logo_url_3, hero_title, hero_subtitle, hero_tagline')
+            .limit(1)
+            .maybeSingle();
+          
+          if (bData) {
+            fullBranding = { ...fullBranding, ...bData };
+          }
+        } catch (e) {}
+
+        setFormData({
+          portal_name: fullBranding.portal_name || '',
+          primary_color: fullBranding.primary_color || '',
+          secondary_color: fullBranding.secondary_color || '',
+          footer_text: fullBranding.footer_text || '',
+          login_title: fullBranding.login_title || '',
+          login_subtitle: fullBranding.login_subtitle || '',
+          logo_url: fullBranding.logo_url || '',
+          logo_url_2: fullBranding.logo_url_2 || '',
+          logo_url_3: fullBranding.logo_url_3 || '',
+          favicon_url: fullBranding.favicon_url || '',
+          login_background_url: fullBranding.login_background_url || '',
+          hero_title: fullBranding.hero_title || '',
+          hero_subtitle: fullBranding.hero_subtitle || '',
+          hero_tagline: fullBranding.hero_tagline || '',
+        });
+      }
+    };
+    
+    fetchFullBranding();
   }, [branding]);
 
   const updateBrandingMutation = useMutation({
     mutationFn: async (updates: any) => {
+      // Update portal_branding_settings
       const { error } = await supabase
         .from('portal_branding_settings')
         .update(updates)
         .eq('id', 1);
+      
       if (error) throw error;
+
+      // Also update branding_settings for redundancy/extra fields
+      try {
+        await supabase
+          .from('branding_settings')
+          .update(updates)
+          .eq('portal_name', formData.portal_name);
+      } catch (e) {}
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portal-branding-settings'] });
@@ -161,17 +200,43 @@ function BrandingSettings() {
             <CardDescription>Logos and favicon used across the platform</CardDescription>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="grid gap-8 md:grid-cols-2">
+            <div className="grid gap-8 md:grid-cols-3">
               <div className="space-y-4">
                 <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Portal Logo
+                  Nigeria Logo
+                  <Badge variant="secondary" className="text-[9px] h-3.5 px-1.5">Seal 1</Badge>
+                </Label>
+                <div className="flex flex-col gap-4">
+                  <div className="aspect-square w-full max-w-[140px] mx-auto rounded-full border bg-white flex items-center justify-center p-4 shadow-inner group relative overflow-hidden ring-2 ring-primary/5">
+                    <img 
+                      src={formData.logo_url_2 || "/logo.png"} 
+                      alt="Logo 1" 
+                      className="max-h-full max-w-full object-contain" 
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Label 
+                        htmlFor="logo2-upload" 
+                        className="text-white text-[10px] font-bold cursor-pointer flex items-center gap-1.5 bg-primary/80 px-3 py-1.5 rounded-full hover:bg-primary"
+                      >
+                        <Upload className="h-3 w-3" />
+                        Change
+                      </Label>
+                    </div>
+                  </div>
+                  <input id="logo2-upload" type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'logo_url_2')} />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Kogi State Logo
                   <Badge variant="secondary" className="text-[9px] h-3.5 px-1.5">Primary</Badge>
                 </Label>
                 <div className="flex flex-col gap-4">
-                  <div className="aspect-square w-full max-w-[160px] mx-auto rounded-lg border bg-white flex items-center justify-center p-6 shadow-inner group relative overflow-hidden">
+                  <div className="aspect-square w-full max-w-[160px] mx-auto rounded-full border bg-white flex items-center justify-center p-6 shadow-inner group relative overflow-hidden ring-4 ring-primary/10 scale-110 z-10">
                     <img 
                       src={formData.logo_url || "/logo.png"} 
-                      alt="Logo" 
+                      alt="Logo Primary" 
                       className="max-h-full max-w-full object-contain" 
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -190,28 +255,91 @@ function BrandingSettings() {
 
               <div className="space-y-4">
                 <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Favicon
-                  <Badge variant="secondary" className="text-[9px] h-3.5 px-1.5">Icon</Badge>
+                  GDU Logo
+                  <Badge variant="secondary" className="text-[9px] h-3.5 px-1.5">Seal 3</Badge>
                 </Label>
                 <div className="flex flex-col gap-4">
-                  <div className="aspect-square w-full max-w-[80px] mx-auto rounded-lg border bg-white flex items-center justify-center p-2 shadow-inner group relative overflow-hidden">
+                  <div className="aspect-square w-full max-w-[140px] mx-auto rounded-full border bg-white flex items-center justify-center p-4 shadow-inner group relative overflow-hidden ring-2 ring-primary/5">
                     <img 
-                      src={formData.favicon_url || "/favicon.ico"} 
-                      alt="Favicon" 
+                      src={formData.logo_url_3 || "/logo.png"} 
+                      alt="Logo 3" 
                       className="max-h-full max-w-full object-contain" 
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <Label 
-                        htmlFor="favicon-upload" 
-                        className="text-white text-[10px] font-bold cursor-pointer bg-primary/80 p-1.5 rounded-full"
+                        htmlFor="logo3-upload" 
+                        className="text-white text-[10px] font-bold cursor-pointer flex items-center gap-1.5 bg-primary/80 px-3 py-1.5 rounded-full hover:bg-primary"
                       >
                         <Upload className="h-3 w-3" />
+                        Change
                       </Label>
                     </div>
                   </div>
-                  <input id="favicon-upload" type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'favicon_url')} />
+                  <input id="logo3-upload" type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'logo_url_3')} />
                 </div>
               </div>
+            </div>
+
+            <div className="mt-12 grid gap-6 md:grid-cols-2">
+               <div className="space-y-4">
+                  <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Favicon
+                    <Badge variant="secondary" className="text-[9px] h-3.5 px-1.5">Browser Icon</Badge>
+                  </Label>
+                  <div className="flex items-center gap-6 p-4 rounded-lg border bg-muted/30">
+                    <div className="h-16 w-16 rounded-lg border bg-white flex items-center justify-center p-2 shadow-sm group relative overflow-hidden">
+                      <img 
+                        src={formData.favicon_url || "/favicon.ico"} 
+                        alt="Favicon" 
+                        className="max-h-full max-w-full object-contain" 
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Label htmlFor="favicon-upload" className="text-white cursor-pointer"><Upload className="h-4 w-4" /></Label>
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-medium">Site Favicon</p>
+                      <p className="text-xs text-muted-foreground">Upload a square ICO or PNG image (32x32px recommended)</p>
+                    </div>
+                    <input id="favicon-upload" type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'favicon_url')} />
+                  </div>
+               </div>
+               
+               <div className="space-y-4">
+                  <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Hero Section Labels
+                    <Badge variant="secondary" className="text-[9px] h-3.5 px-1.5">Login Side Panel</Badge>
+                  </Label>
+                  <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold">Main Title</Label>
+                      <Input 
+                        value={formData.hero_title} 
+                        onChange={(e) => setFormData({ ...formData, hero_title: e.target.value })} 
+                        className="h-8 text-sm"
+                        placeholder="GOVERNMENT DELIVERY UNIT (GDU)"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold">Subtitle</Label>
+                      <Input 
+                        value={formData.hero_subtitle} 
+                        onChange={(e) => setFormData({ ...formData, hero_subtitle: e.target.value })} 
+                        className="h-8 text-sm"
+                        placeholder="KOGI STATE GOVERNMENT"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-bold">Tagline</Label>
+                      <Input 
+                        value={formData.hero_tagline} 
+                        onChange={(e) => setFormData({ ...formData, hero_tagline: e.target.value })} 
+                        className="h-8 text-sm"
+                        placeholder="…Confluence of Opportunities"
+                      />
+                    </div>
+                  </div>
+               </div>
             </div>
           </CardContent>
         </Card>

@@ -1,4 +1,4 @@
-export type UserRole = 'staff' | 'accounts' | 'admin' | 'dg' | 'ta' | 'ict' | 'super_admin' | 'adhoc';
+export type UserRole = 'staff' | 'accounts' | 'admin' | 'dg' | 'technical_assistant' | 'ict' | 'super_admin' | 'adhoc';
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'leave' | 'holiday';
 

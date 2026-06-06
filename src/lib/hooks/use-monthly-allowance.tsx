@@ -20,16 +20,12 @@ export function useMonthlyAllowance() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('monthly_allowance_settings')
-        .select(`
-          *,
-          eligible_roles:monthly_allowance_eligible_roles(role_id),
-          eligible_departments:monthly_allowance_eligible_departments(department_id)
-        `)
+        .select('*')
         .eq('month', currentMonth)
         .eq('year', currentYear)
-        .single();
+        .maybeSingle();
       
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       return data;
     },
   });
@@ -45,15 +41,7 @@ export function useMonthlyAllowance() {
         .eq('user_id', profile.id)
         .single();
       if (error) throw error;
-      
-      // We also need the role id from the roles table
-      const { data: roleData } = await supabase
-        .from('roles')
-        .select('id')
-        .eq('slug', data.role)
-        .maybeSingle();
-        
-      return { ...data, role_id: roleData?.id };
+      return data;
     },
     enabled: !!profile?.id,
   });
@@ -128,7 +116,7 @@ export function useMonthlyAllowance() {
       }
       return data;
     },
-    enabled: !!profile && ['accounts', 'admin', 'dg', 'ta', 'ict', 'super_admin'].includes(profile?.role || ''),
+    enabled: !!profile && ['accounts', 'admin', 'dg', 'technical_assistant', 'ict', 'super_admin'].includes(profile?.role || ''),
   });
 
   // Accountant: Update request status
@@ -197,10 +185,10 @@ export function useMonthlyAllowance() {
   const isEligible = (() => {
     if (!settings || !staffRecord) return { status: false, reason: 'Loading...' };
 
-    const eligibleRoleIds = settings.eligible_roles?.map((r: any) => r.role_id) || [];
-    const eligibleDeptIds = settings.eligible_departments?.map((d: any) => d.department_id) || [];
+    const eligibleRoles = settings.eligible_roles || [];
+    const eligibleDeptIds = settings.eligible_departments || [];
 
-    const isRoleEligible = eligibleRoleIds.length === 0 || (staffRecord.role_id && eligibleRoleIds.includes(staffRecord.role_id));
+    const isRoleEligible = eligibleRoles.length === 0 || eligibleRoles.includes(staffRecord.role);
     const isDeptEligible = eligibleDeptIds.length === 0 || (staffRecord.department_id && eligibleDeptIds.includes(staffRecord.department_id));
 
     if (!isRoleEligible || !isDeptEligible) {
@@ -210,10 +198,11 @@ export function useMonthlyAllowance() {
       };
     }
 
-    if (attendanceStats && attendanceStats.percentage < (settings.minimum_attendance_percentage || 80)) {
+    const threshold = settings.attendance_threshold || 80;
+    if (attendanceStats && attendanceStats.percentage < threshold) {
       return { 
         status: false, 
-        reason: `Sorry, you do not have up to ${settings.minimum_attendance_percentage || 80}% attendance and you are not entitled to this month’s payment. Thanks for your understanding.` 
+        reason: `Sorry, you do not have up to ${threshold}% attendance and you are not entitled to this month’s payment. Thanks for your understanding.` 
       };
     }
 
@@ -235,8 +224,6 @@ export function useMonthlyAllowance() {
         .from('monthly_allowance_requests')
         .insert({
           staff_id: profile.staff_id,
-          department_id: staffRecord.department_id,
-          role_id: staffRecord.role_id,
           month: currentMonth,
           year: currentYear,
           attendance_percentage: attendanceStats.percentage,
@@ -257,7 +244,7 @@ export function useMonthlyAllowance() {
 
   // Accountant: Update settings
   const updateSettings = useMutation({
-    mutationFn: async ({ amount, minAttendance, roleIds, deptIds }: any) => {
+    mutationFn: async ({ amount, minAttendance, roles, deptIds }: any) => {
       let settingId = settings?.id;
 
       if (settingId) {
@@ -265,44 +252,27 @@ export function useMonthlyAllowance() {
           .from('monthly_allowance_settings')
           .update({ 
             amount, 
-            minimum_attendance_percentage: minAttendance,
-            updated_by: profile?.id, 
+            attendance_threshold: minAttendance,
+            eligible_roles: roles,
+            eligible_departments: deptIds,
+            set_by: profile?.id, 
             updated_at: new Date().toISOString() 
           })
           .eq('id', settingId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('monthly_allowance_settings')
           .insert({ 
             amount, 
             month: currentMonth, 
             year: currentYear, 
-            minimum_attendance_percentage: minAttendance,
-            created_by: profile?.id 
-          })
-          .select()
-          .single();
+            attendance_threshold: minAttendance,
+            eligible_roles: roles,
+            eligible_departments: deptIds,
+            set_by: profile?.id 
+          });
         if (error) throw error;
-        settingId = data.id;
-      }
-
-      // Update eligible roles
-      await supabase.from('monthly_allowance_eligible_roles').delete().eq('allowance_setting_id', settingId);
-      if (roleIds?.length > 0) {
-        const { error: roleError } = await supabase
-          .from('monthly_allowance_eligible_roles')
-          .insert(roleIds.map((rid: string) => ({ allowance_setting_id: settingId, role_id: rid })));
-        if (roleError) throw roleError;
-      }
-
-      // Update eligible departments
-      await supabase.from('monthly_allowance_eligible_departments').delete().eq('allowance_setting_id', settingId);
-      if (deptIds?.length > 0) {
-        const { error: deptError } = await supabase
-          .from('monthly_allowance_eligible_departments')
-          .insert(deptIds.map((did: string) => ({ allowance_setting_id: settingId, department_id: did })));
-        if (deptError) throw deptError;
       }
     },
     onSuccess: () => {

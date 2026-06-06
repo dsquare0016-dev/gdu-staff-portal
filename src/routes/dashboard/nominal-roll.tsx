@@ -2,9 +2,11 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
 import { useState } from 'react';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { exportToPDF, exportToExcel } from '@/lib/utils/export';
+import { useBranding } from '@/lib/hooks/use-branding';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -56,7 +58,7 @@ export const Route = createFileRoute('/dashboard/nominal-roll')({
 });
 
 const gradeLevels = ['All Levels', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17'];
-const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'ta', 'ict', 'staff'];
+const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'technical_assistant', 'ict', 'staff'];
 
 function NominalRollPage() {
   const { canAccess, isSuperAdmin } = useAuth();
@@ -83,7 +85,7 @@ function NominalRollPage() {
     },
   });
 
-  const departments = ['All Departments', ...dbDepartments.map(d => d.name)];
+  const departments = ['All Departments', ...(dbDepartments || []).map(d => d.name)];
 
   // Fetch staff from database for nominal roll
   const { data: staffRecords = [], isLoading } = useQuery({
@@ -108,13 +110,55 @@ function NominalRollPage() {
     ? roles 
     : roles.filter(r => r !== 'super_admin');
 
-  const canExport = canAccess('staff', 'view');
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <PortalLoader />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
-  const filteredRoll = staffRecords.filter((record) => {
+  const { profile } = useAuth();
+  const { data: branding } = useBranding();
+
+  const handleExport = (formatType: 'pdf' | 'excel') => {
+    const headers = ['S/No', 'Full Name', 'Rank/Position', 'GL/Step', 'Department', 'Role', 'Employment Date'];
+    const exportData = filteredRoll.map((record, i) => ({
+      's/no': i + 1,
+      full_name: record.full_name,
+      'rank/position': record.position || record.rank || 'N/A',
+      'gl/step': `Level ${record.grade_level} / Step ${record.step}`,
+      department: record.department?.name || 'N/A',
+      role: record.role.toUpperCase(),
+      employment_date: record.employment_date ? format(new Date(record.employment_date), 'PPP') : 'N/A'
+    }));
+
+    if (formatType === 'pdf') {
+      exportToPDF({
+        data: exportData,
+        filename: 'Nominal_Roll_Report',
+        title: 'Nominal Roll Workforce Report',
+        headers,
+        generatedBy: profile?.full_name,
+        branding
+      });
+    } else {
+      exportToExcel({
+        data: exportData,
+        filename: 'Nominal_Roll_Report',
+        title: 'Nominal Roll Workforce Report',
+        branding
+      });
+    }
+  };
+
+  const filteredRoll = (staffRecords || []).filter((record) => {
     const staffDept = record.department?.name || '';
     const matchesSearch =
-      record.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (record.position && record.position.toLowerCase().includes(searchQuery.toLowerCase()));
+      (record.full_name || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (record.position && (record.position || '').toLowerCase().includes((searchQuery || '').toLowerCase()));
     
     const matchesDepartment =
       departmentFilter === 'All Departments' || staffDept === departmentFilter;
@@ -141,7 +185,7 @@ function NominalRollPage() {
     total: filteredRoll.length,
     male: filteredRoll.filter((r) => r.gender === 'male').length,
     female: filteredRoll.filter((r) => r.gender === 'female').length,
-    departments: new Set(filteredRoll.map((r) => r.department?.name)).size,
+    departments: new Set(filteredRoll.map((r) => r.department?.name).filter(Boolean)).size,
   };
 
   const handleExportCSV = () => {
@@ -195,11 +239,11 @@ function NominalRollPage() {
             </Button>
             {isSuperAdmin && (
               <>
-                <Button variant="outline" onClick={() => toast.info('PDF export initialized...')}>
+                <Button variant="outline" onClick={() => handleExport('pdf')}>
                   <FileText className="mr-2 h-4 w-4" />
                   Export PDF
                 </Button>
-                <Button variant="outline" onClick={() => toast.info('Excel export initialized...')}>
+                <Button variant="outline" onClick={() => handleExport('excel')}>
                   <FileSpreadsheet className="mr-2 h-4 w-4" />
                   Export Excel
                 </Button>

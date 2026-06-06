@@ -76,7 +76,7 @@ function DepartmentsPage() {
         .from('departments')
         .select(`
           *,
-          head:head_of_department_id(full_name, position),
+          head:head_of_department_id(full_name),
           staff_count:staff_records(count)
         `);
       if (error) throw error;
@@ -100,8 +100,8 @@ function DepartmentsPage() {
 
   const filteredDepartments = departments?.filter(
     (dept) =>
-      dept.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (dept.code?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+      (dept.name || '').toLowerCase().includes((searchQuery || '').toLowerCase()) ||
+      (dept.code || '').toLowerCase().includes((searchQuery || '').toLowerCase())
   ) || [];
 
   const activeDepts = departments?.filter((d) => d.status === 'active').length || 0;
@@ -245,7 +245,6 @@ function DepartmentsPage() {
                           <UserCircle className="h-4 w-4 text-muted-foreground" />
                           <div>
                             <p className="text-sm">{dept.head.full_name}</p>
-                            <p className="text-xs text-muted-foreground">{dept.head.position}</p>
                           </div>
                         </div>
                       ) : (

@@ -75,21 +75,22 @@ interface ChatUser {
 interface Message {
   id: string;
   sender_id: string;
-  receiver_id?: string;
-  group_id?: string;
-  content: string;
-  attachment_url?: string;
-  attachment_type?: string;
+  group_id: string;
+  content: string | null;
+  file_url?: string | null;
+  file_type?: string | null;
   created_at: string;
   is_read: boolean;
 }
 
 function ChatPage() {
-  const { profile, isSuperAdmin, isAdmin, isICT } = useAuth();
+  const { profile, isSuperAdmin, isAdmin, isICT, isTechnicalAssistant } = useAuth();
   const queryClient = useQueryClient();
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<string | null>(null); // This is user_id for chats, group_id for groups
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [chatType, setChatType] = useState<'chats' | 'groups' | 'announcements'>('chats');
   const [newMessage, setNewMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
@@ -121,14 +122,16 @@ function ChatPage() {
   const [announcementContent, setAnnouncementContent] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: users = [] } = useQuery({
-    queryKey: ['chat-users'],
+    queryKey: ['chat-users', profile?.id],
+    enabled: !!profile?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .neq('id', profile?.id)
+        .neq('id', profile!.id)
         .eq('is_active', true);
       if (error) {
         handleDatabaseError(error, 'fetch chat users');
@@ -138,30 +141,116 @@ function ChatPage() {
     },
   });
 
-  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
-    queryKey: ['messages', selectedChat, chatType],
-    enabled: !!selectedChat,
+  const { data: groups = [] } = useQuery({
+    queryKey: ['chat-groups', profile?.id],
+    enabled: !!profile?.id,
     queryFn: async () => {
-      let query = supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: true });
+      const { data, error } = await supabase
+        .from('chat_groups')
+        .select('*');
+      if (error) {
+        handleDatabaseError(error, 'fetch chat groups');
+        return [];
+      }
+      return data;
+    },
+  });
 
-      if (chatType === 'chats') {
-        query = query.or(`and(sender_id.eq.${profile?.id},receiver_id.eq.${selectedChat}),and(sender_id.eq.${selectedChat},receiver_id.eq.${profile?.id})`);
-      } else {
-        query = query.eq('group_id', selectedChat);
+  // Effect to handle group selection and direct chat group creation
+  useEffect(() => {
+    const setupChat = async () => {
+      if (!selectedChat || !profile?.id) {
+        setActiveGroupId(null);
+        return;
       }
 
-      const { data, error } = await query;
+      if (chatType === 'groups') {
+        setActiveGroupId(selectedChat);
+        return;
+      }
+
+      if (chatType === 'chats') {
+        try {
+          // Find if a direct group already exists between these two users
+          // 1. Get all direct groups for the current user
+          const { data: myDirectGroups, error: groupError } = await supabase
+            .from('chat_groups')
+            .select('id')
+            .eq('type', 'direct');
+
+          if (groupError) throw groupError;
+
+          if (myDirectGroups && myDirectGroups.length > 0) {
+            const groupIds = myDirectGroups.map(g => g.id);
+            
+            // 2. Check which of these groups has the selected user as a member
+            const { data: existingMembers, error: memberError } = await supabase
+              .from('chat_group_members')
+              .select('group_id')
+              .in('group_id', groupIds)
+              .eq('user_id', selectedChat)
+              .maybeSingle();
+
+            if (memberError) throw memberError;
+
+            if (existingMembers) {
+              setActiveGroupId(existingMembers.group_id);
+              return;
+            }
+          }
+
+          // 3. If no group exists, create one
+          const { data: newGroup, error: createGroupError } = await supabase
+            .from('chat_groups')
+            .insert([{
+              name: `Direct: ${profile.id}-${selectedChat}`,
+              type: 'direct',
+              created_by: profile.id
+            }])
+            .select()
+            .single();
+
+          if (createGroupError) throw createGroupError;
+
+          // 4. Add both users to the group
+          const { error: memberAddError } = await supabase
+            .from('chat_group_members')
+            .insert([
+              { group_id: newGroup.id, user_id: profile.id },
+              { group_id: newGroup.id, user_id: selectedChat }
+            ]);
+
+          if (memberAddError) throw memberAddError;
+
+          setActiveGroupId(newGroup.id);
+          queryClient.invalidateQueries({ queryKey: ['chat-groups'] });
+        } catch (error: any) {
+          handleDatabaseError(error, 'setup direct chat');
+        }
+      }
+    };
+
+    setupChat();
+  }, [selectedChat, chatType, profile?.id, queryClient]);
+
+  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['messages', activeGroupId],
+    enabled: !!activeGroupId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('group_id', activeGroupId)
+        .order('created_at', { ascending: true });
+
       if (error) {
         handleDatabaseError(error, 'fetch messages');
         return [];
       }
       
-      // Mark as read
+      // Mark as read (only messages not sent by me)
       if (data.length > 0) {
-        const unread = data.filter(m => !m.is_read && m.receiver_id === profile?.id);
+        const unread = data.filter(m => !m.is_read && m.sender_id !== profile?.id);
         if (unread.length > 0) {
           await supabase
             .from('messages')
@@ -175,28 +264,15 @@ function ChatPage() {
   });
 
   const { data: announcements = [] } = useQuery({
-    queryKey: ['announcements'],
+    queryKey: ['announcements', profile?.id],
+    enabled: !!profile?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('announcements')
         .select('*')
-        .order('created_at', { descending: true });
+        .order('created_at', { ascending: false });
       if (error) {
         handleDatabaseError(error, 'fetch announcements');
-        return [];
-      }
-      return data;
-    },
-  });
-
-  const { data: groups = [] } = useQuery({
-    queryKey: ['chat-groups'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('chat_groups')
-        .select('*');
-      if (error) {
-        handleDatabaseError(error, 'fetch chat groups');
         return [];
       }
       return data;
@@ -210,6 +286,10 @@ function ChatPage() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() && !attachment) return;
+    if (!activeGroupId) {
+      handlePortalNotification('Please select a chat first', { severity: 'warning' });
+      return;
+    }
 
     try {
       let attachmentUrl = null;
@@ -226,11 +306,10 @@ function ChatPage() {
         .from('messages')
         .insert([{
           sender_id: profile?.id,
-          receiver_id: chatType === 'chats' ? selectedChat : null,
-          group_id: chatType !== 'chats' ? selectedChat : null,
+          group_id: activeGroupId,
           content: newMessage,
-          attachment_url: attachmentUrl,
-          attachment_type: attachmentType,
+          file_url: attachmentUrl,
+          file_type: attachmentType,
         }]);
 
       if (error) throw error;
@@ -238,7 +317,7 @@ function ChatPage() {
       setAttachment(null);
       setAttachmentPreview(null);
       setReplyTo(null);
-      queryClient.invalidateQueries({ queryKey: ['messages', selectedChat] });
+      queryClient.invalidateQueries({ queryKey: ['messages', activeGroupId] });
     } catch (error: any) {
       handleDatabaseError(error, 'send message');
     } finally {
@@ -315,11 +394,26 @@ function ChatPage() {
     handlePortalNotification("Voice calling feature coming soon in production. Currently simulating call with " + selectedUser?.full_name, { severity: 'info' });
   };
 
+  const filteredUsers = users.filter(user => 
+    user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.role?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredGroups = groups.filter(group => 
+    group.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredAnnouncements = announcements.filter(ann => 
+    ann.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    ann.content?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const selectedUser = users.find(u => u.id === selectedChat);
+
   const getStatusColor = (status: string) => {
     return status === 'active' ? 'bg-green-500' : 'bg-gray-400';
   };
-
-  const selectedUser = users.find(u => u.id === selectedChat);
 
   return (
     <DashboardLayout>
@@ -359,7 +453,12 @@ function ChatPage() {
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search..." className="pl-10 h-9" />
+              <Input 
+                placeholder="Search staff..." 
+                className="pl-10 h-9" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </CardHeader>
 
@@ -462,7 +561,7 @@ function ChatPage() {
           <ScrollArea className="flex-1">
             <div className="space-y-1 p-2">
               {chatType === 'chats' &&
-                users.map((user) => (
+                filteredUsers.map((user) => (
                   <button
                     key={user.id}
                     onClick={() => setSelectedChat(user.id)}
@@ -496,8 +595,30 @@ function ChatPage() {
                   </button>
                 ))}
 
+              {chatType === 'groups' &&
+                filteredGroups.map((group) => (
+                  <button
+                    key={group.id}
+                    onClick={() => setSelectedChat(group.id)}
+                    className={cn(
+                      'w-full flex items-center gap-3 p-2 rounded-lg transition-colors',
+                      selectedChat === group.id
+                        ? 'bg-primary/10 text-primary'
+                        : 'hover:bg-muted/50'
+                    )}
+                  >
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Hash className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-medium truncate">{group.name}</p>
+                      <p className="text-xs text-muted-foreground uppercase">{group.type}</p>
+                    </div>
+                  </button>
+                ))}
+
               {chatType === 'announcements' &&
-                announcements.map((ann) => (
+                filteredAnnouncements.map((ann) => (
                   <button
                     key={ann.id}
                     className="w-full flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
@@ -589,18 +710,18 @@ function ChatPage() {
                             )}
                           >
                             {msg.content && <p className="text-sm">{msg.content}</p>}
-                            {msg.attachment_url && (
+                            {msg.file_url && (
                               <div className="mt-2">
-                                {msg.attachment_type === 'image' ? (
+                                {msg.file_type === 'image' || msg.file_type?.startsWith('image') ? (
                                   <img 
-                                    src={msg.attachment_url} 
+                                    src={msg.file_url} 
                                     alt="Attachment" 
                                     className="max-w-full rounded-lg cursor-pointer hover:opacity-90"
-                                    onClick={() => window.open(msg.attachment_url, '_blank')}
+                                    onClick={() => window.open(msg.file_url!, '_blank')}
                                   />
                                 ) : (
                                   <a 
-                                    href={msg.attachment_url} 
+                                    href={msg.file_url} 
                                     target="_blank" 
                                     rel="noopener noreferrer"
                                     className="flex items-center gap-2 p-2 bg-background/10 rounded border border-white/20 hover:bg-background/20 transition-colors"
@@ -685,17 +806,17 @@ function ChatPage() {
                   </Button>
                   <Input
                     placeholder="Type a message..."
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
                     className="flex-1"
-                    onKeyDown={(e) => e.key === 'Enter' && sendMessageMutation.mutate()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                   />
                   <Button 
                     size="icon" 
-                    disabled={(!message.trim() && !attachment) || sendMessageMutation.isPending}
-                    onClick={() => sendMessageMutation.mutate()}
+                    disabled={(!newMessage.trim() && !attachment) || isUploading}
+                    onClick={handleSendMessage}
                   >
-                    {sendMessageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
