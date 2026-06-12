@@ -64,14 +64,20 @@ function ProfilePage() {
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">{profile.full_name || 'User'}</h1>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-wrap items-center gap-3 mt-2">
                 <Badge variant="secondary" className="capitalize">
                   <Shield className="h-3 w-3 mr-1" />
                   {profile.role.replace('_', ' ')}
                 </Badge>
-                <span className="text-muted-foreground text-sm flex items-center gap-1">
+                <Badge variant="outline" className="font-mono bg-primary/5 text-primary border-primary/20">
+                  ID: {profile.readable_id || 'N/A'}
+                </Badge>
+                <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                  Dept: {profile.department?.name || 'N/A'}
+                </Badge>
+                <span className="text-muted-foreground text-xs flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  Last seen: {profile.last_seen ? new Date(profile.last_seen).toLocaleDateString() : 'Today'}
+                  Last seen: Today
                 </span>
               </div>
             </div>
@@ -80,10 +86,6 @@ function ProfilePage() {
             <Button variant="outline" onClick={() => signOut()} className="text-destructive hover:bg-destructive/10">
               <LogOut className="mr-2 h-4 w-4" />
               Sign Out
-            </Button>
-            <Button onClick={handleSave}>
-              <Save className="mr-2 h-4 w-4" />
-              Save Changes
             </Button>
           </div>
         </div>
@@ -115,7 +117,7 @@ function ProfilePage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="fullName">Full Name</Label>
-                      <Input id="fullName" defaultValue={profile.full_name || ''} />
+                      <Input id="fullName" defaultValue={profile.full_name || ''} disabled />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email Address</Label>
@@ -127,41 +129,40 @@ function ProfilePage() {
                       <Label htmlFor="phone">Phone Number</Label>
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input id="phone" className="pl-10" defaultValue={profile.phone || ''} placeholder="+234..." />
+                        <Input id="phone" className="pl-10" defaultValue={profile.phone || ''} disabled />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="location">State/LGA</Label>
                       <div className="relative">
                         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input id="location" className="pl-10" placeholder="Kogi State" />
+                        <Input id="location" className="pl-10" placeholder="Kogi State" disabled />
                       </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border backdrop-blur-sm">
+              <Card className="border backdrop-blur-sm bg-gradient-to-br from-primary/5 via-white to-white">
                 <CardHeader>
-                  <CardTitle>Account Security</CardTitle>
-                  <CardDescription>Manage your password and security settings</CardDescription>
+                  <CardTitle>Bank Account Details</CardTitle>
+                  <CardDescription>Your official payment account details</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="currentPass">Current Password</Label>
-                    <Input id="currentPass" type="password" />
+                    <Label>Account Name</Label>
+                    <Input value={profile.account_name || 'Not Provided'} disabled className="bg-background" />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="newPass">New Password</Label>
-                      <Input id="newPass" type="password" />
+                      <Label>Bank Name</Label>
+                      <Input value={profile.bank_name || 'Not Provided'} disabled className="bg-background" />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="confirmPass">Confirm Password</Label>
-                      <Input id="confirmPass" type="password" />
+                      <Label>Account Number</Label>
+                      <Input value={profile.account_number || 'Not Provided'} disabled className="bg-background" />
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full">Change Password</Button>
                 </CardContent>
               </Card>
             </div>

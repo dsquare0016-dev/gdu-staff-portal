@@ -78,7 +78,6 @@ import {
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
-import { createClient } from '@supabase/supabase-js';
 import { exportToPDF, exportToExcel } from '@/lib/utils/export';
 import { useBranding } from '@/lib/hooks/use-branding';
 import { PortalLoader } from '@/components/ui/portal-loader';
@@ -1013,6 +1012,9 @@ function StaffForm({
     next_of_kin_rel: initialData?.next_of_kin_rel || '',
     passport_url: initialData?.passport_url || '',
     readable_id: initialData?.readable_id || '',
+    account_name: initialData?.account_name || '',
+    bank_name: initialData?.bank_name || '',
+    account_number: initialData?.account_number || '',
   });
 
   useEffect(() => {
@@ -1066,6 +1068,10 @@ function StaffForm({
           qualification: formData.qualification.trim(),
           address: formData.address.trim(),
           passport_url: formData.passport_url,
+          passport_photo: formData.passport_url,
+          account_name: formData.account_name.trim(),
+          bank_name: formData.bank_name.trim(),
+          account_number: formData.account_number.trim(),
           updated_at: new Date().toISOString()
         };
 
@@ -1127,6 +1133,10 @@ function StaffForm({
           qualification: formData.qualification.trim(),
           address: formData.address.trim(),
           passport_url: formData.passport_url,
+          passport_photo: formData.passport_url,
+          account_name: formData.account_name.trim(),
+          bank_name: formData.bank_name.trim(),
+          account_number: formData.account_number.trim(),
         };
 
         const { error: staffError } = await supabase
@@ -1417,6 +1427,43 @@ function StaffForm({
                 onChange={(e) => setFormData({ ...formData, readable_id: e.target.value })} 
                 placeholder="e.g. GDU100"
                 disabled={isEditing}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            Bank Account Details
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Account Name</label>
+              <Input 
+                required 
+                value={formData.account_name} 
+                onChange={(e) => setFormData({ ...formData, account_name: e.target.value })} 
+                placeholder="e.g. ADEBAYO JOHNSON"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Bank Name</label>
+              <Input 
+                required 
+                value={formData.bank_name} 
+                onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })} 
+                placeholder="e.g. Zenith Bank"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Account Number</label>
+              <Input 
+                required 
+                maxLength={10} 
+                value={formData.account_number} 
+                onChange={(e) => setFormData({ ...formData, account_number: e.target.value })} 
+                placeholder="e.g. 1012345678"
               />
             </div>
           </div>

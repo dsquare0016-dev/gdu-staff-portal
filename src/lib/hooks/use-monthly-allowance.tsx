@@ -105,7 +105,12 @@ export function useMonthlyAllowance() {
             id,
             full_name,
             readable_id,
-            department_id
+            department_id,
+            account_name,
+            bank_name,
+            account_number,
+            passport_photo,
+            passport_url
           )
         `)
         .eq('month', currentMonth)

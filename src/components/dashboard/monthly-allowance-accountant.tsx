@@ -56,11 +56,31 @@ export function MonthlyAllowanceAccountant() {
   const [minAttendance, setMinAttendance] = useState('80');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+
+  // Payment sheet search & filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [deptFilter, setDeptFilter] = useState('All Departments');
+  const [statusFilter, setStatusFilter] = useState('All Status');
   
   const [rejectDialog, setRejectDialog] = useState<{ open: boolean, requestId: string, reason: string }>({
     open: false,
     requestId: '',
     reason: ''
+  });
+
+  // Computed filtered requests for payment sheet
+  const filteredRequests = (allRequests || []).filter((req: any) => {
+    const name = req.staff?.full_name?.toLowerCase() || '';
+    const id = req.staff?.readable_id?.toLowerCase() || '';
+    const accNum = req.staff?.account_number || '';
+    const deptName = req.staff?.department?.name || '';
+    const matchesSearch = !searchQuery || 
+      name.includes(searchQuery.toLowerCase()) ||
+      id.includes(searchQuery.toLowerCase()) ||
+      accNum.includes(searchQuery);
+    const matchesDept = deptFilter === 'All Departments' || deptName === deptFilter;
+    const matchesStatus = statusFilter === 'All Status' || req.status === statusFilter;
+    return matchesSearch && matchesDept && matchesStatus;
   });
 
   useEffect(() => {
@@ -236,63 +256,131 @@ export function MonthlyAllowanceAccountant() {
       </Card>
 
       <Card className="border shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg">Allowance Requests</CardTitle>
-          <CardDescription>Review and process staff allowance requests for this month.</CardDescription>
+        <CardHeader className="pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg">Payment-Ready Staff Account Sheet</CardTitle>
+              <CardDescription>View, search, and verify staff bank details alongside allowance records for payment processing.</CardDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="rounded-xl border-primary/20 text-primary hover:bg-primary/5"
+              onClick={() => {
+                const csvContent = "data:text/csv;charset=utf-8," 
+                  + ["Staff Name,Staff ID,Department,Account Name,Bank Name,Account Number,Allowance Amount,Payment Status"].join(",") + "\n"
+                  + filteredRequests.map(r => [
+                      `"${r.staff?.full_name || 'N/A'}"`,
+                      `"${r.staff?.readable_id || 'N/A'}"`,
+                      `"${r.staff?.department?.name || 'General'}"`,
+                      `"${r.staff?.account_name || 'N/A'}"`,
+                      `"${r.staff?.bank_name || 'N/A'}"`,
+                      `"${r.staff?.account_number || 'N/A'}"`,
+                      r.allowance_amount,
+                      r.status
+                    ].join(",")).join("\n");
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `GDU_Allowance_Payment_Sheet_${currentMonthName}_${currentYear}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+            >
+              Export Payment Sheet (CSV)
+            </Button>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 mt-4">
+            <div className="relative flex-1">
+              <Input 
+                placeholder="Search staff name, ID, or account number..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10 rounded-xl"
+              />
+            </div>
+            <div className="flex gap-2">
+              <select 
+                value={deptFilter} 
+                onChange={(e) => setDeptFilter(e.target.value)}
+                className="h-10 px-3 rounded-xl border border-input bg-background text-sm focus:ring-1 focus:ring-primary"
+              >
+                <option value="All Departments">All Departments</option>
+                {departments?.map(d => (
+                  <option key={d.id} value={d.name}>{d.name}</option>
+                ))}
+              </select>
+              <select 
+                value={statusFilter} 
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-10 px-3 rounded-xl border border-input bg-background text-sm focus:ring-1 focus:ring-primary"
+              >
+                <option value="All Status">All Status</option>
+                <option value="Processing">Processing</option>
+                <option value="Approved">Approved</option>
+                <option value="Paid">Paid</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="rounded-xl border overflow-hidden">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead>Staff</TableHead>
+                  <TableHead>Staff Info</TableHead>
                   <TableHead>Department</TableHead>
-                  <TableHead className="text-center">Attendance</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Request Date</TableHead>
+                  <TableHead>Bank Account Details</TableHead>
+                  <TableHead className="text-right">Allowance</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {!allRequests || allRequests.length === 0 ? (
+                {filteredRequests.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                      No requests submitted yet for this month.
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      No matching records found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  allRequests.map((req: any) => (
+                  filteredRequests.map((req: any) => (
                     <TableRow key={req.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
-                              {req.staff?.full_name?.split(' ').map((n: string) => n[0]).join('')}
-                            </AvatarFallback>
+                          <Avatar className="h-10 w-10 border shadow-sm">
+                            {req.staff?.passport_url || req.staff?.passport_photo ? (
+                              <img src={req.staff?.passport_url || req.staff?.passport_photo} alt="Passport" className="h-full w-full object-cover" />
+                            ) : (
+                              <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                                {req.staff?.full_name?.split(' ').map((n: string) => n[0]).join('')}
+                              </AvatarFallback>
+                            )}
                           </Avatar>
                           <div>
                             <p className="text-sm font-bold text-slate-900">{req.staff?.full_name}</p>
-                            <p className="text-[10px] font-mono text-muted-foreground uppercase">{req.staff?.readable_id}</p>
+                            <p className="text-[10px] font-mono font-bold text-primary uppercase">{req.staff?.readable_id}</p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                          <Building2 className="h-3 w-3" />
+                        <div className="text-xs font-semibold text-slate-600">
                           {req.staff?.department?.name || 'General'}
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className={req.attendance_percentage >= (settings?.minimum_attendance_percentage || 80) ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}>
-                          {req.attendance_percentage}%
-                        </Badge>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-slate-800">{req.staff?.account_name || 'Not Registered'}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            <span className="font-bold text-slate-600">{req.staff?.bank_name || '—'}</span> • <span className="font-mono">{req.staff?.account_number || '—'}</span>
+                          </p>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-bold text-slate-900">
                         ₦{req.allowance_amount.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {new Date(req.requested_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
                         {req.status === 'Processing' && <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 gap-1"><Clock className="h-3 w-3" /> Processing</Badge>}

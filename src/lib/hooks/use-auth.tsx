@@ -1,9 +1,22 @@
 import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Profile, UserRole } from '@/types';
-import type { User, Session } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { useNavigate } from '@tanstack/react-router';
+
+export interface User {
+  id: string;
+  email?: string;
+  user_metadata?: {
+    full_name?: string;
+    role?: string;
+  };
+}
+
+export interface Session {
+  access_token: string;
+  user: User;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -270,7 +283,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 1. Fetch staff record
       const { data: staffData } = await queryWithTimeout(
         (supabase.from('staff_records') as any)
-          .select('id, readable_id, position, department_id')
+          .select('id, readable_id, position, department_id, account_name, bank_name, account_number, passport_photo, passport_url')
           .eq('user_id', userId)
           .maybeSingle(),
         5000,
@@ -295,6 +308,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           staff_id: staffData.id,
           readable_id: staffData.readable_id,
           position: staffData.position,
+          account_name: staffData.account_name,
+          bank_name: staffData.bank_name,
+          account_number: staffData.account_number,
+          passport_photo: staffData.passport_photo,
+          passport_url: staffData.passport_url || staffData.passport_photo,
+          avatar_url: staffData.passport_url || staffData.passport_photo || prev.avatar_url,
           department: department
         } : null);
       }
