@@ -1,3 +1,6 @@
+import React, { useState } from "react";
+
+import { Landmark } from "lucide-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -8,6 +11,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import { AuthProvider } from "@/lib/hooks/use-auth";
 import { NotificationProvider } from "@/lib/providers/notification-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -38,90 +42,106 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error("Dashboard Error:", error);
+  const [showDeveloperInfo, setShowDeveloperInfo] = useState(false);
   const router = useRouter();
+  const timestamp = new Date().toLocaleString();
 
   // Friendly explanations for common errors
   const getFriendlyMessage = (err: Error) => {
     const msg = err.message.toLowerCase();
-    if (msg.includes('is not defined')) {
-      return "A required component or icon was not found. This is usually due to a missing import.";
+    if (msg.includes('is not defined') || msg.includes('lucide')) {
+      return "A required component or icon was not found. This is usually due to a missing import or broken package.";
     }
-    if (msg.includes('failed to fetch') || msg.includes('networkerror')) {
-      return "There seems to be a connection problem. Please check your internet and try again.";
+    if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('supabase')) {
+      return "There seems to be a connection problem with the database. Please check your internet and try again.";
     }
-    if (msg.includes('supabase')) {
-      return "There was an issue communicating with the database. Please try again later.";
+    if (msg.includes('relationship') || msg.includes('column') || msg.includes('schema')) {
+      return "There is a mismatch between the portal code and the database structure. A database migration might be needed.";
     }
-    return "Something went wrong while rendering this page.";
+    return "Something went wrong while rendering this page. Our technical team has been notified.";
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md w-full text-center">
-        <h1 className="text-xl font-bold tracking-tight text-foreground uppercase italic">
-          This page didn't load
-        </h1>
-        
-        <div className="mt-6 p-6 bg-destructive/5 border border-destructive/10 rounded-2xl text-left shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 h-4 w-4 rounded-full bg-destructive flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-bold text-white">!</span>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-destructive">Reason:</p>
-              <p className="text-xs font-mono text-destructive/80 break-words leading-relaxed bg-white/50 p-2 rounded border border-destructive/5">
-                {error.message || 'An unknown error occurred'}
-              </p>
-            </div>
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div className="max-w-2xl w-full text-center space-y-8">
+        <div className="space-y-4">
+          <div className="mx-auto h-24 w-24 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 animate-pulse">
+            <Landmark className="h-12 w-12" />
           </div>
-
-          <div className="mt-6 flex items-start gap-3">
-            <div className="mt-0.5 h-4 w-4 rounded-full bg-primary flex items-center justify-center shrink-0">
-              <span className="text-[10px] font-bold text-white">?</span>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-primary">Suggested Fix:</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {getFriendlyMessage(error)}
-              </p>
-            </div>
-          </div>
-
-          {error.stack && (
-            <details className="mt-6 group">
-              <summary className="text-[10px] text-muted-foreground cursor-pointer uppercase tracking-widest font-bold flex items-center gap-2 hover:text-foreground transition-colors">
-                <span className="group-open:rotate-90 transition-transform">▶</span>
-                Stack Trace
-              </summary>
-              <pre className="mt-3 text-[10px] overflow-auto max-h-40 text-muted-foreground/60 bg-muted/30 p-3 rounded-xl border font-mono">
-                {error.stack}
-              </pre>
-            </details>
-          )}
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase italic">
+            Portal Under Maintenance
+          </h1>
+          <p className="text-lg text-slate-600 font-medium max-w-md mx-auto">
+            Sorry, this page is currently under maintenance and will be back soon.
+          </p>
         </div>
 
-        <p className="mt-6 text-sm text-muted-foreground font-medium">
-          The technical team has been notified.
-        </p>
-        
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
-            className="inline-flex items-center justify-center rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 shadow-lg shadow-primary/20 active:scale-95"
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+          <Button 
+            onClick={() => window.location.href = '/dashboard'} 
+            className="rounded-full px-8 h-12 font-bold shadow-lg"
           >
-            Try again
-          </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-xl border-2 border-primary/20 bg-background px-6 py-2.5 text-sm font-bold text-foreground transition-all hover:bg-muted active:scale-95"
+            Return to Dashboard
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowDeveloperInfo(!showDeveloperInfo)}
+            className="rounded-full px-8 h-12 font-bold border-2"
           >
-            Go home
-          </a>
+            {showDeveloperInfo ? "Hide Technical Info" : "If you are the Developer, click here to see problem statement"}
+          </Button>
         </div>
+
+        {showDeveloperInfo && (
+          <div className="mt-12 p-8 bg-white border-2 border-slate-200 rounded-3xl text-left shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center justify-between mb-6 border-b pb-4">
+              <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Developer Diagnostic Tool</h2>
+              <span className="text-[10px] font-mono text-slate-400">{timestamp}</span>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase text-red-500 tracking-tighter">Error Message</p>
+                <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
+                  <p className="text-sm font-mono text-red-700 break-words leading-relaxed">
+                    {error.message || 'An unknown error occurred'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase text-slate-500 tracking-tighter">Route URL</p>
+                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <p className="text-xs font-mono text-slate-600 truncate">{window.location.pathname}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase text-slate-500 tracking-tighter">Suggested Fix</p>
+                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                    <p className="text-xs font-bold text-slate-600">{getFriendlyMessage(error)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {error.stack && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase text-slate-500 tracking-tighter">Stack Trace</p>
+                  <pre className="text-[10px] overflow-auto max-h-48 text-slate-400 bg-slate-900 p-4 rounded-xl font-mono leading-relaxed">
+                    {error.stack}
+                  </pre>
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-8 pt-6 border-t flex justify-between items-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">GDU Staff Portal — System Error Log</p>
+              <Button size="sm" variant="ghost" className="text-[10px] font-black uppercase" onClick={reset}>
+                Force Re-render
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

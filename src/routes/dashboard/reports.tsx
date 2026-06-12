@@ -94,11 +94,28 @@ function ReportsPage() {
   const { data: staffByDepartment = [], isLoading: isLoadingDist } = useQuery({
     queryKey: ['reports-staff-dist'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('staff_records').select('department:departments(name)');
-      if (error) return [];
+      // 1. Fetch staff records
+      const { data: staff, error: staffError } = await supabase
+        .from('staff_records')
+        .select('department_id');
+      
+      if (staffError) return [];
+
+      // 2. Fetch departments
+      const { data: depts, error: deptsError } = await supabase
+        .from('departments')
+        .select('id, name');
+      
+      if (deptsError) return [];
+
+      const deptMap = (depts || []).reduce((acc: Record<string, string>, d: any) => {
+        acc[d.id] = d.name;
+        return acc;
+      }, {});
+
       const counts: Record<string, number> = {};
-      data.forEach(r => {
-        const name = r.department?.name || 'Other';
+      (staff || []).forEach(r => {
+        const name = r.department_id ? (deptMap[r.department_id] || 'Other') : 'Other';
         counts[name] = (counts[name] || 0) + 1;
       });
       const colors = ['#1e3a8a', '#b45309', '#15803d', '#7e22ce', '#be185d', '#334155'];

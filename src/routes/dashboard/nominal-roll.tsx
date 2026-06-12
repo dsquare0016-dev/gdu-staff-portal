@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
-import { useState } from 'react';
+import { PortalLoader } from '@/components/ui/portal-loader';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -61,7 +62,8 @@ const gradeLevels = ['All Levels', '1', '2', '3', '4', '5', '6', '7', '8', '9', 
 const roles = ['All Roles', 'super_admin', 'admin', 'accounts', 'dg', 'technical_assistant', 'ict', 'staff'];
 
 function NominalRollPage() {
-  const { canAccess, isSuperAdmin } = useAuth();
+  const { canAccess, isSuperAdmin, profile } = useAuth();
+  const { data: branding } = useBranding();
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [gradeFilter, setGradeFilter] = useState('All Levels');
@@ -69,42 +71,55 @@ function NominalRollPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // Fetch departments from database
-  const { data: dbDepartments = [] } = useQuery({
+  const { data: dbDepartments = [] as string[] } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('departments')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      if (error) {
-        handleDatabaseError(error, 'fetch departments');
-        return [];
-      }
-      return data;
+      const { data, error } = await supabase.from('departments').select('name').eq('status', 'active').order('name');
+      if (error) return [] as string[];
+      return data.map(d => d.name) as string[];
     },
   });
 
-  const departments = ['All Departments', ...(dbDepartments || []).map(d => d.name)];
+  const departments = ['All Departments', ...(dbDepartments || [])];
+
+  // Fetch departments for merge - MOVED UP
+  const { data: allDepts = [] } = useQuery({
+    queryKey: ['departments-all'],
+    queryFn: async () => {
+      const { data } = await supabase.from('departments').select('id, name');
+      return data || [];
+    }
+  });
 
   // Fetch staff from database for nominal roll
-  const { data: staffRecords = [], isLoading } = useQuery({
-    queryKey: ['nominal-roll-records'],
+  const { data: staffRecordsRaw = [] as any[], isLoading } = useQuery({
+    queryKey: ['nominal-roll-raw'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Fetch staff
+      const { data: staff, error } = await supabase
         .from('staff_records')
-        .select(`
-          *,
-          department:departments(name)
-        `)
+        .select('*')
         .order('full_name');
       if (error) {
         handleDatabaseError(error, 'fetch nominal roll');
-        return [];
+        return [] as any[];
       }
-      return data;
+      return staff || [];
     },
+    enabled: !!profile,
   });
+
+  const staffRecords = useMemo(() => {
+    const deptMap = (allDepts || []).reduce((acc: Record<string, any>, d: any) => {
+      acc[d.id] = d;
+      return acc;
+    }, {});
+
+    return (staffRecordsRaw || []).map((record: any) => ({
+      ...record,
+      department: record.department_id ? deptMap[record.department_id] : null
+    }));
+  }, [staffRecordsRaw, allDepts]);
 
   const availableRoles = isSuperAdmin 
     ? roles 
@@ -119,9 +134,6 @@ function NominalRollPage() {
       </DashboardLayout>
     );
   }
-
-  const { profile } = useAuth();
-  const { data: branding } = useBranding();
 
   const handleExport = (formatType: 'pdf' | 'excel') => {
     const headers = ['S/No', 'Full Name', 'Rank/Position', 'GL/Step', 'Department', 'Role', 'Employment Date'];

@@ -23,6 +23,8 @@ export interface Profile {
   updated_at: string;
   staff_id?: string;
   readable_id?: string;
+  position?: string | null;
+  department?: { name: string } | null;
 }
 
 export interface Department {

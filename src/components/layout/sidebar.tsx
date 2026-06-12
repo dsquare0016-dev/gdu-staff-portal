@@ -166,7 +166,7 @@ export function Sidebar() {
 
   const filteredNavItems = navItems.filter(
     (item) => {
-      const hasRole = !item.roles || (profile && item.roles.includes(profile.role));
+      const hasRole = !item.roles || (profile && item.roles.includes(profile.role as any));
       if (!hasRole) return false;
       
       // For items with children, check if the parent item itself should be visible
@@ -177,7 +177,7 @@ export function Sidebar() {
     if (item.children) {
       return {
         ...item,
-        children: item.children.filter(child => !child.roles || (profile && child.roles.includes(profile.role)))
+        children: item.children.filter(child => !child.roles || (profile && child.roles.includes(profile.role as any)))
       };
     }
     return item;
@@ -204,11 +204,17 @@ export function Sidebar() {
       <div className="flex items-center justify-between p-4 border-b border-border/50">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg overflow-hidden flex items-center justify-center shadow-lg bg-white p-0.5">
-              <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shadow-inner">
+              {(branding as any)?.logo_url ? (
+                <img src={(branding as any).logo_url} alt="Logo" className="h-6 w-6 object-contain" />
+              ) : (
+                <Building2 className="h-5 w-5 text-primary" />
+              )}
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-bold text-foreground">{portalName}</span>
+              <span className="text-sm font-bold tracking-tight text-foreground leading-none">
+                {(branding as any)?.portal_name || 'GDU Portal'}
+              </span>
               <span className="text-[10px] text-muted-foreground">Staff Management</span>
             </div>
           </div>

@@ -93,7 +93,7 @@ function DashboardPage() {
   }, []);
 
   // 1. Fetch Weekly Attendance Data
-  const { data: weeklyAttendance = [], isLoading: isLoadingAttendanceData } = useQuery({
+  const { data: weeklyAttendance = [] as any[], isLoading: isLoadingAttendanceData } = useQuery({
     queryKey: ['dashboard-weekly-attendance'],
     queryFn: async () => {
       const start = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -107,7 +107,7 @@ function DashboardPage() {
       
       if (error) {
         handleDatabaseError(error, 'fetch weekly attendance');
-        return [];
+        return [] as any[];
       }
 
       const days = eachDayOfInterval({ start, end });
@@ -120,36 +120,45 @@ function DashboardPage() {
           absent: dayRecords.filter(r => r.status === 'absent').length,
           late: dayRecords.filter(r => r.status === 'late').length,
         };
-      });
+      }) as any[];
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
-  // 2. Fetch Staff Distribution by Department
-  const { data: staffDistribution = [], isLoading: isLoadingDist } = useQuery({
+  const { data: staffDistribution = [] as any[], isLoading: isLoadingDist } = useQuery({
     queryKey: ['dashboard-staff-distribution'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Fetch staff records
+      const { data: staff, error: staffError } = await supabase
         .from('staff_records')
-        .select('department:departments(name)');
+        .select('department_id');
       
-      if (error) {
-        handleDatabaseError(error, 'fetch staff distribution');
-        return [];
+      if (staffError) {
+        handleDatabaseError(staffError, 'fetch staff records');
+        return [] as any[];
       }
 
-      const counts: Record<string, number> = {};
-      (data || []).forEach(r => {
-        const deptName = r.department?.name || 'Unassigned';
-        counts[deptName] = (counts[deptName] || 0) + 1;
-      });
+      // 2. Fetch departments
+      const { data: depts, error: deptsError } = await supabase
+        .from('departments')
+        .select('id, name');
+      
+      if (deptsError) {
+        handleDatabaseError(deptsError, 'fetch departments');
+        return [] as any[];
+      }
 
-      const colors = ['#1e3a8a', '#b45309', '#15803d', '#7e22ce', '#be188a', '#334155'];
-      return Object.entries(counts).map(([name, value], index) => ({
-        name,
-        value,
-        color: colors[index % colors.length]
-      }));
+      const deptMap = (depts || []).reduce((acc: Record<string, string>, d: any) => {
+        acc[d.id] = d.name;
+        return acc;
+      }, {});
+
+      const dist: Record<string, number> = {};
+      (staff || []).forEach((s: any) => {
+        const deptName = s.department_id ? (deptMap[s.department_id] || 'Unassigned') : 'Unassigned';
+        dist[deptName] = (dist[deptName] || 0) + 1;
+      });
+      return Object.entries(dist).map(([name, value]) => ({ name, value })) as any[];
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
@@ -185,7 +194,7 @@ function DashboardPage() {
   });
 
   // 4. Fetch Recent Activity (Audit Logs)
-  const { data: recentActivities = [], isLoading: isLoadingActivities } = useQuery({
+  const { data: recentActivities = [] as any[], isLoading: isLoadingActivities } = useQuery({
     queryKey: ['dashboard-recent-activities'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -197,16 +206,16 @@ function DashboardPage() {
       if (error) {
         // Don't show toast for this one as it's less critical
         console.error('Error fetching audit logs:', error);
-        return [];
+        return [] as any[];
       }
 
       return (data || []).map(log => ({
         id: log.id,
-        user: log.user?.full_name || 'System',
+        user: (log.user as any)?.full_name || 'System',
         action: log.action.toLowerCase(),
         time: format(new Date(log.created_at), 'p'),
-        avatar: log.user?.avatar_url || ''
-      }));
+        avatar: (log.user as any)?.avatar_url || ''
+      })) as any[];
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
@@ -272,12 +281,14 @@ function DashboardPage() {
       const staffIds = [...new Set(allPending.map(p => p.staff_id).filter(Boolean))];
       if (staffIds.length > 0) {
         try {
-          const { data: staffData } = await supabase
+          const { data: staffData, error: staffError } = await supabase
             .from('staff_records')
             .select('id, full_name')
             .in('id', staffIds);
           
-          const staffMap = (staffData || []).reduce((acc: Record<string, string>, s) => {
+          if (staffError) throw staffError;
+
+          const staffMap = (staffData || []).reduce((acc: Record<string, string>, s: any) => {
             acc[s.id] = s.full_name;
             return acc;
           }, {});
@@ -290,31 +301,33 @@ function DashboardPage() {
         } catch (e) { /* non-critical */ }
       }
 
-      return allPending.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+      return allPending.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5) as any[];
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
-  // 6. Fetch Global Stats for Admin
-  const { data: globalStats } = useQuery({
+  const { data: globalStats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['dashboard-global-stats'],
     queryFn: async () => {
-      try {
-        const [docs, depts] = await Promise.all([
-          supabase.from('documents').select('*', { count: 'exact', head: true }),
-          supabase.from('departments').select('*', { count: 'exact', head: true }).eq('is_active', true)
-        ]);
-        return {
-          totalDocuments: docs.count || 0,
-          totalDepartments: depts.count || 0
-        };
-      } catch (e: any) {
-        console.warn('[Dashboard] Exception fetching global stats:', e.message);
-        return {
-          totalDocuments: 0,
-          totalDepartments: 0
-        };
+      const [
+        { count: totalStaff, error: err1 },
+        { count: totalDepts, error: err2 },
+        { count: totalDocs, error: err3 }
+      ] = await Promise.all([
+        supabase.from('staff_records').select('*', { count: 'exact', head: true }),
+        supabase.from('departments').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('documents').select('*', { count: 'exact', head: true })
+      ]);
+      
+      if (err1 || err2 || err3) {
+        console.warn('[Dashboard] Stats fetch warning:', err1?.message || err2?.message || err3?.message);
       }
+
+      return {
+        totalStaff: totalStaff || 0,
+        totalDepartments: totalDepts || 0,
+        totalDocuments: totalDocs || 0
+      } as any;
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
@@ -344,77 +357,58 @@ function DashboardPage() {
     enabled: userIsStaff && !!profile?.staff_id,
   });
 
-  // Admin/Global Stats
-  const { data: staffStats } = useQuery({
+  const { data: staffStats, isLoading: isLoadingStaffStats } = useQuery({
     queryKey: ['dashboard-staff-stats'],
     queryFn: async () => {
-      try {
-        const { count, error } = await supabase
-          .from('staff_records')
-          .select('*', { count: 'exact', head: true });
-        if (error) {
-          console.warn('[Dashboard] Failed to fetch staff stats:', error.message);
-          return { total: 0 };
-        }
-        return { total: count || 0 };
-      } catch (e: any) {
-        console.warn('[Dashboard] Exception fetching staff stats:', e.message);
-        return { total: 0 };
+      const [
+        { count: total, error: err1 },
+        { count: active, error: err2 }
+      ] = await Promise.all([
+        supabase.from('staff_records').select('*', { count: 'exact', head: true }),
+        supabase.from('staff_records').select('*', { count: 'exact', head: true }).eq('status', 'active')
+      ]);
+      
+      if (err1 || err2) {
+        console.warn('[Dashboard] Staff stats fetch warning:', err1?.message || err2?.message);
       }
+      
+      return { total: total || 0, active: active || 0 } as any;
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
-  const { data: attendanceStats } = useQuery({
+  const { data: attendanceStats, isLoading: isLoadingAttendance } = useQuery({
     queryKey: ['dashboard-attendance-stats'],
     queryFn: async () => {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const { data, error } = await supabase
-          .from('attendance')
-          .select('status')
-          .eq('date', today);
-        
-        if (error) {
-          console.warn('[Dashboard] Failed to fetch attendance stats:', error.message);
-          return { presentToday: 0, absentToday: 0 };
-        }
-        
-        const safeData = data || [];
-        return {
-          presentToday: safeData.filter(r => r.status === 'present' || r.status === 'late').length,
-          absentToday: safeData.filter(r => r.status === 'absent').length,
-        };
-      } catch (e: any) {
-        console.warn('[Dashboard] Exception fetching attendance stats:', e.message);
-        return { presentToday: 0, absentToday: 0 };
+      const today = new Date().toISOString().split('T')[0];
+      const [
+        { count: presentToday, error: err1 },
+        { count: lateToday, error: err2 }
+      ] = await Promise.all([
+        supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('date', today).eq('status', 'present'),
+        supabase.from('attendance').select('*', { count: 'exact', head: true }).eq('date', today).eq('status', 'late')
+      ]);
+      
+      if (err1 || err2) {
+        console.warn('[Dashboard] Attendance stats fetch warning:', err1?.message || err2?.message);
       }
+      
+      return { presentToday: presentToday || 0, lateToday: lateToday || 0 } as any;
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
 
-  const { data: allowanceStats } = useQuery({
+  const { data: allowanceStats, isLoading: isLoadingAllowances } = useQuery({
     queryKey: ['dashboard-allowance-stats'],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('monthly_allowance_requests')
-          .select('status');
-        
-        if (error) {
-          console.warn('[Dashboard] Failed to fetch allowance stats:', error.message);
-          return { pending: 0, paid: 0 };
-        }
-
-        const safeData = data || [];
-        return {
-          pending: safeData.filter(r => r.status === 'Processing').length,
-          paid: safeData.filter(r => r.status === 'Paid').length,
-        };
-      } catch (e: any) {
-        console.warn('[Dashboard] Exception fetching allowance stats:', e.message);
-        return { pending: 0, paid: 0 };
+      const { data, error } = await supabase.from('allowances').select('amount').eq('payment_status', 'paid');
+      
+      if (error) {
+        console.warn('[Dashboard] Allowance stats fetch warning:', error.message);
       }
+
+      const totalApproved = (data || []).reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0);
+      return { totalApproved } as any;
     },
     enabled: !!profile && (isSuperAdmin || isAdmin || isTechnicalAssistant || isAccounts || isDirector),
   });
@@ -426,7 +420,7 @@ function DashboardPage() {
         const { count, error } = await supabase
           .from('departments')
           .select('*', { count: 'exact', head: true })
-          .eq('is_active', true);
+          .eq('status', 'active');
         if (error) {
           console.warn('[Dashboard] Failed to fetch department stats:', error.message);
           return { total: 0 };
@@ -564,29 +558,29 @@ function DashboardPage() {
               title="Total Staff"
               value={staffStats?.total?.toString() || '0'}
               icon={Users}
-              trend="+2.5%"
-              description="from last month"
+              trend={{ value: 2.5, isPositive: true }}
+              subtitle="from last month"
             />
             <StatCard
               title="Present Today"
               value={attendanceStats?.presentToday?.toString() || '0'}
               icon={CheckCircle}
-              trend={`${attendanceRate}%`}
-              description="attendance rate"
+              trend={{ value: attendanceRate, isPositive: true }}
+              subtitle="attendance rate"
             />
             <StatCard
-              title="Absent Today"
-              value={attendanceStats?.absentToday?.toString() || '0'}
-              icon={AlertCircle}
+              title="Late Comers"
+              value={attendanceStats?.lateToday?.toString() || '0'}
+              icon={Clock}
               variant="danger"
-              description="Requires attention"
+              subtitle="needs attention"
             />
             <StatCard
-              title="Paid Allowances"
-              value={allowanceStats?.paid?.toString() || '0'}
+              title="Approved Allowances"
+              value={`₦${allowanceStats?.totalApproved?.toLocaleString() || '0'}`}
               icon={Wallet}
               variant="success"
-              description="Processed this month"
+              subtitle="current month"
             />
           </div>
         )}
@@ -608,24 +602,24 @@ function DashboardPage() {
         {userIsStaff && (
           <div className="grid gap-6 md:grid-cols-12">
             <div className="md:col-span-8 space-y-6">
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-3">
                 <StatCard
                   title="Attendance Rate"
                   value={`${personalStats?.attendanceRate || 0}%`}
                   icon={CheckCircle}
-                  description="Overall presence"
+                  subtitle="overall presence"
                 />
                 <StatCard
                   title="Total Present"
                   value={personalStats?.totalPresent?.toString() || '0'}
                   icon={Activity}
-                  description="Days recorded"
+                  subtitle="days recorded"
                 />
                 <StatCard
                   title="Last Check-in"
                   value={personalStats?.lastCheckIn ? (personalStats.lastCheckIn.includes(':') ? personalStats.lastCheckIn.split(':').slice(0, 2).join(':') : new Date(personalStats.lastCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : 'None'}
                   icon={Clock}
-                  description="Today's status"
+                  subtitle="today's status"
                 />
               </div>
 

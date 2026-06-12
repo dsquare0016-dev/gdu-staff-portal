@@ -31,7 +31,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     if (mounted && !loading && !profile && !authError) {
-      navigate({ to: '/' });
+      console.log('[DashboardLayout] No session/profile found, redirecting to login...');
+      navigate({ to: '/', replace: true });
       return;
     }
 

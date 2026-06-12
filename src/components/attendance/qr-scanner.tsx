@@ -59,7 +59,7 @@ export function QRScanner() {
       const { data: existing, error: existingError } = await supabase
         .from('attendance')
         .select('*')
-        .eq('staff_id', staff.id)
+        .eq('staff_id', (staff as any).id)
         .eq('date', today)
         .maybeSingle();
 
@@ -70,36 +70,36 @@ export function QRScanner() {
           .update({ 
             check_out: now.toISOString(),
             status: 'present'
-          })
-          .eq('id', existing.id);
+          } as any)
+          .eq('id', (existing as any).id);
 
         if (updateError) throw updateError;
         
         setScanResult({ 
           success: true, 
-          message: `Check-out successful for ${staff.full_name}`,
+          message: `Check-out successful for ${(staff as any).full_name}`,
           staff 
         });
-        toast.success(`Check-out: ${staff.full_name}`);
+        toast.success(`Check-out: ${(staff as any).full_name}`);
       } else {
         // Insert check-in
         const { error: insertError } = await supabase
           .from('attendance')
           .insert([{
-            staff_id: staff.id,
+            staff_id: (staff as any).id,
             date: today,
             check_in: now.toISOString(),
             status: now.getHours() >= 9 && now.getMinutes() > 0 ? 'late' : 'present'
-          }]);
+          } as any]);
 
         if (insertError) throw insertError;
 
         setScanResult({ 
           success: true, 
-          message: `Check-in successful for ${staff.full_name}`,
+          message: `Check-in successful for ${(staff as any).full_name}`,
           staff 
         });
-        toast.success(`Check-in: ${staff.full_name}`);
+        toast.success(`Check-in: ${(staff as any).full_name}`);
       }
       
       setManualId(''); // Clear manual input on success

@@ -109,63 +109,87 @@ function PayrollPage() {
   const [isAddTransactionOpen, setIsAddTransactionOpen] = useState(false);
 
   // 1. Fetch Transactions
-  const { data: transactions = [], isLoading: isLoadingTxns } = useQuery({
+  const { data: transactions = [] as any[], isLoading: isLoadingTxns } = useQuery({
     queryKey: ['transactions'],
     queryFn: async () => {
       // Temporarily return empty array as table might be missing
-      return [];
+      return [] as any[];
     }
   });
 
   // 2. Fetch Payroll Records
-  const { data: payrollRecords = [], isLoading: isLoadingPayroll } = useQuery({
+  const { data: payrollRecords = [] as any[], isLoading: isLoadingPayroll } = useQuery({
     queryKey: ['payroll-records', monthFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Fetch payroll records with staff
+      const { data: payroll, error: payrollError } = await supabase
         .from('payroll')
         .select(`
           *,
-          staff:staff_records(full_name, email, department:departments(name))
+          staff:staff_records!staff_id(full_name, email, department_id)
         `)
         .eq('month', parseInt(monthFilter))
         .eq('year', new Date().getFullYear());
       
-      if (error) {
-        handleDatabaseError(error, 'fetch payroll records');
-        return [];
+      if (payrollError) {
+        handleDatabaseError(payrollError, 'fetch payroll records');
+        return [] as any[];
       }
-      return data;
+
+      // 2. Fetch departments
+      const { data: depts, error: deptsError } = await supabase
+        .from('departments')
+        .select('id, name');
+      
+      if (deptsError) {
+        handleDatabaseError(deptsError, 'fetch departments');
+        return [] as any[];
+      }
+
+      const deptMap = (depts || []).reduce((acc: Record<string, any>, d: any) => {
+        acc[d.id] = d;
+        return acc;
+      }, {});
+
+      // 3. Manual merge
+      return (payroll || []).map((record: any) => {
+        const staff = record.staff;
+        if (staff) {
+          staff.department = staff.department_id ? deptMap[staff.department_id] : null;
+        }
+        return record;
+      });
     }
   });
 
   // 3. Fetch Allowances
-  const { data: allowanceRecords = [], isLoading: isLoadingAllowances } = useQuery({
+  const { data: allowanceRecords = [] as any[], isLoading: isLoadingAllowances } = useQuery({
     queryKey: ['allowance-records', monthFilter],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('allowances')
         .select(`
           *,
-          staff:staff_records(full_name)
+          staff:staff_records!staff_id(full_name)
         `)
         .eq('month', parseInt(monthFilter))
         .eq('year', new Date().getFullYear());
       
       if (error) {
         handleDatabaseError(error, 'fetch allowance records');
-        return [];
+        return [] as any[];
       }
-      return data;
+      return data as any[];
     }
   });
 
   // 4. Fetch Departments
-  const { data: dbDepartments = [] } = useQuery({
+  const { data: dbDepartments = [] as string[] } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('departments').select('name').eq('is_active', true);
-      if (error) return [];
-      return data.map(d => d.name);
+      const { data, error } = await supabase.from('departments').select('name').eq('status', 'active');
+      if (error) return [] as string[];
+      return data.map(d => d.name) as string[];
     }
   });
 

@@ -102,20 +102,40 @@ function BrandingSettings() {
 
   const updateBrandingMutation = useMutation({
     mutationFn: async (updates: any) => {
-      // Update portal_branding_settings
-      const { error } = await supabase
+      // 1. Prepare updates for portal_branding_settings
+      const portalUpdates: any = { ...updates };
+      // Map login_bg_url to login_background_url if only one is present
+      if (portalUpdates.login_bg_url && !portalUpdates.login_background_url) {
+        portalUpdates.login_background_url = portalUpdates.login_bg_url;
+      }
+      
+      const { error: portalError } = await supabase
         .from('portal_branding_settings')
-        .update(updates)
+        .update(portalUpdates)
         .eq('id', 1);
       
-      if (error) throw error;
+      if (portalError) {
+        console.warn('Error updating portal_branding_settings:', portalError.message);
+      }
 
-      // Also update branding_settings for redundancy/extra fields
+      // 2. Prepare updates for branding_settings (legacy table)
+      const legacyUpdates: any = { ...updates };
+      // Remove logo_url if user says it doesn't exist in legacy table
+      delete legacyUpdates.logo_url;
+      
+      if (legacyUpdates.login_background_url && !legacyUpdates.login_bg_url) {
+        legacyUpdates.login_bg_url = legacyUpdates.login_background_url;
+      }
+
       try {
-        await supabase
+        const { error: legacyError } = await supabase
           .from('branding_settings')
-          .update(updates)
-          .eq('portal_name', formData.portal_name);
+          .update(legacyUpdates)
+          .eq('portal_name', formData.portal_name || 'GDU Staff Portal');
+        
+        if (legacyError) {
+          console.warn('Error updating branding_settings:', legacyError.message);
+        }
       } catch (e) {}
     },
     onSuccess: () => {
@@ -134,12 +154,26 @@ function BrandingSettings() {
     try {
       setIsSubmitting(true);
       
+      // Explicit authentication check
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('You must be logged in to upload assets');
+        return;
+      }
+      
       const fileExt = file.name.split('.').pop();
-      const filePath = `branding/${fieldName}-${Math.random()}.${fileExt}`;
+      const timestamp = Date.now();
+      
+      // Use "background" for the filename if the field is login_background_url as requested
+      const fileNamePart = fieldName === 'login_background_url' ? 'background' : fieldName;
+      const filePath = `branding/${fileNamePart}-${timestamp}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from('portal-assets')
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
 
       if (uploadError) throw uploadError;
 
@@ -147,11 +181,19 @@ function BrandingSettings() {
         .from('portal-assets')
         .getPublicUrl(filePath);
 
-      await updateBrandingMutation.mutateAsync({ [fieldName]: publicUrl });
+      // Save to database immediately
+      // Map fieldName to other potential column names for consistency across tables
+      const updates: any = { [fieldName]: publicUrl };
+      if (fieldName === 'login_background_url') {
+        updates.login_bg_url = publicUrl;
+      }
+
+      await updateBrandingMutation.mutateAsync(updates);
       setFormData(prev => ({ ...prev, [fieldName]: publicUrl }));
       
-      toast.success(`${fieldName.replace('_', ' ')} updated successfully`);
+      toast.success(`${fileNamePart.replace(/_/g, ' ')} updated successfully`);
     } catch (error: any) {
+      console.error('Upload error:', error);
       toast.error(`Error uploading image: ${error.message}`);
     } finally {
       setIsSubmitting(false);

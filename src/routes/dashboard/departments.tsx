@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { handleDatabaseError } from '@/lib/error-handler';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,18 +70,66 @@ function DepartmentsPage() {
   const canManage = canAccess('staff', 'create') || canAccess('staff', 'edit');
 
   // Fetch departments
-  const { data: departments, isLoading } = useQuery({
+  const { data: departments = [] as any[], isLoading } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch departments first
+      const { data: depts, error: deptsError } = await supabase
         .from('departments')
-        .select(`
-          *,
-          head:head_of_department_id(full_name),
-          staff_count:staff_records(count)
-        `);
-      if (error) throw error;
-      return data;
+        .select('*')
+        .order('name');
+      
+      if (deptsError) {
+        handleDatabaseError(deptsError, 'fetch departments');
+        return [] as any[];
+      }
+
+      // Fetch heads separately for stability
+      const headIds = depts.map(d => d.head_of_department_id).filter(Boolean);
+      let headMap: Record<string, string> = {};
+      
+      if (headIds.length > 0) {
+        const { data: heads } = await supabase
+          .from('staff_records')
+          .select('id, full_name')
+          .in('id', headIds);
+        
+        headMap = (heads || []).reduce((acc, h) => {
+          acc[h.id] = h.full_name;
+          return acc;
+        }, {} as Record<string, string>);
+      }
+
+      // Fetch staff counts separately
+      const { data: staffCounts } = await supabase
+        .from('staff_records')
+        .select('department_id');
+      
+      const countMap = (staffCounts || []).reduce((acc, s) => {
+        if (s.department_id) {
+          acc[s.department_id] = (acc[s.department_id] || 0) + 1;
+        }
+        return acc;
+      }, {} as Record<string, number>);
+
+      return depts.map(d => ({
+        ...d,
+        head: d.head_of_department_id ? { full_name: headMap[d.head_of_department_id] } : null,
+        staff_count: [{ count: countMap[d.id] || 0 }]
+      }));
+    },
+  });
+
+  const { data: staffList = [] as any[] } = useQuery({
+    queryKey: ['staff-list-for-dept'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select('id, full_name, position')
+        .eq('status', 'active')
+        .order('full_name');
+      if (error) return [] as any[];
+      return data as any[];
     },
   });
 

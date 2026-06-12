@@ -96,25 +96,49 @@ export function useMonthlyAllowance() {
   const { data: allRequests, isLoading: isLoadingAllRequests } = useQuery({
     queryKey: ['all-monthly-allowance-requests', currentMonth, currentYear],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Fetch requests with staff records (excluding department join)
+      const { data: requests, error: requestsError } = await supabase
         .from('monthly_allowance_requests')
         .select(`
           *,
-          staff:staff_records(
+          staff:staff_records!staff_id(
             id,
             full_name,
             readable_id,
-            department:departments(name)
+            department_id
           )
         `)
         .eq('month', currentMonth)
         .eq('year', currentYear);
 
-      if (error) {
-        handleDatabaseError(error, 'fetch allowance requests');
+      if (requestsError) {
+        handleDatabaseError(requestsError, 'fetch allowance requests');
         return [];
       }
-      return data;
+
+      // 2. Fetch departments
+      const { data: depts, error: deptsError } = await supabase
+        .from('departments')
+        .select('id, name');
+      
+      if (deptsError) {
+        handleDatabaseError(deptsError, 'fetch departments');
+        return [] as any[];
+      }
+
+      const deptMap = (depts || []).reduce((acc: Record<string, string>, d: any) => {
+        acc[d.id] = d.name;
+        return acc;
+      }, {});
+
+      // 3. Manual merge
+      return (requests || []).map((req: any) => {
+        const staff = req.staff;
+        if (staff) {
+          staff.department = staff.department_id ? { name: deptMap[staff.department_id] || 'N/A' } : { name: 'N/A' };
+        }
+        return req;
+      });
     },
     enabled: !!profile && ['accounts', 'admin', 'dg', 'technical_assistant', 'ict', 'super_admin'].includes(profile?.role || ''),
   });
@@ -128,7 +152,7 @@ export function useMonthlyAllowance() {
 
       const { data: request, error: fetchError } = await supabase
         .from('monthly_allowance_requests')
-        .select('staff:staff_records(user_id), month, year')
+        .select('staff:staff_records!staff_id(user_id), month, year')
         .eq('id', requestId)
         .single();
 

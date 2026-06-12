@@ -90,54 +90,65 @@ function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  // Fetch documents from database
-  const { data: documents = [], isLoading } = useQuery({
-    queryKey: ['documents'],
+  const { data: documents = [] as any[], isLoading } = useQuery({
+    queryKey: ['documents', profile?.id],
     queryFn: async () => {
-      if (!profile?.id) {
-        console.warn('[Documents] No profile ID available for query');
-        return [];
-      }
+      if (!profile?.id) return [] as any[];
 
       let query = supabase
         .from('documents')
         .select(`
           *,
-          staff:staff_records(full_name),
+          staff:staff_records!staff_id(full_name),
           category:document_categories(name)
         `)
         .order('created_at', { ascending: false });
 
-      // Non-privileged users only see their own docs
       if (!isSuperAdmin && !canAccess('documents', 'view_all')) {
-        if (!profile.staff_id) {
-          console.warn('[Documents] No staff ID for personal query');
-          return [];
+        if (profile.staff_id) {
+          query = query.eq('staff_id', profile.staff_id);
+        } else {
+          // If no staff_id, non-admin shouldn't see anything
+          return [] as any[];
         }
-        query = query.eq('staff_id', profile.staff_id);
       }
 
       const { data, error } = await query;
       if (error) {
         handleDatabaseError(error, 'fetch documents');
-        return [];
+        return [] as any[];
       }
-      return data;
+      return data as any[];
     },
     enabled: !!profile,
   });
 
-  // Fetch categories
-  const { data: dbCategories = [] } = useQuery({
+  const { data: categoriesData = [] as any[] } = useQuery({
     queryKey: ['document-categories'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('document_categories').select('name');
-      if (error) return [];
-      return data.map(c => c.name);
-    }
+      const { data, error } = await supabase
+        .from('document_categories')
+        .select('*')
+        .order('name');
+      if (error) return [] as any[];
+      return data as any[];
+    },
   });
 
-  const categories = ['All Categories', ...dbCategories];
+  const { data: staffList = [] as any[] } = useQuery({
+    queryKey: ['staff-list-for-docs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('staff_records')
+        .select('id, full_name')
+        .order('full_name');
+      if (error) return [] as any[];
+      return data as any[];
+    },
+    enabled: isSuperAdmin || canAccess('documents', 'manage'),
+  });
+
+  const categories = ['All Categories', ...categoriesData.map((c: any) => c.name)];
 
   const deleteDocumentMutation = useMutation({
     mutationFn: async (id: string) => {

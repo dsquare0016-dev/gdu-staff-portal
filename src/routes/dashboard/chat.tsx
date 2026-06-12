@@ -67,7 +67,7 @@ interface ChatUser {
   full_name: string;
   email: string;
   passport_url?: string;
-  status: 'active' | 'inactive';
+  is_active: boolean;
   role: string;
   last_seen?: string;
 }
@@ -124,7 +124,7 @@ function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [] as any[] } = useQuery({
     queryKey: ['chat-users', profile?.id],
     enabled: !!profile?.id,
     queryFn: async () => {
@@ -135,13 +135,13 @@ function ChatPage() {
         .eq('is_active', true);
       if (error) {
         handleDatabaseError(error, 'fetch chat users');
-        return [];
+        return [] as any[];
       }
-      return data;
+      return data as any[];
     },
   });
 
-  const { data: groups = [] } = useQuery({
+  const { data: groups = [] as any[] } = useQuery({
     queryKey: ['chat-groups', profile?.id],
     enabled: !!profile?.id,
     queryFn: async () => {
@@ -150,9 +150,9 @@ function ChatPage() {
         .select('*');
       if (error) {
         handleDatabaseError(error, 'fetch chat groups');
-        return [];
+        return [] as any[];
       }
-      return data;
+      return data as any[];
     },
   });
 
@@ -233,23 +233,23 @@ function ChatPage() {
     setupChat();
   }, [selectedChat, chatType, profile?.id, queryClient]);
 
-  const { data: messages = [], isLoading: isLoadingMessages } = useQuery({
+  const { data: messages = [] as any[], isLoading: isLoadingMessages } = useQuery({
     queryKey: ['messages', activeGroupId],
     enabled: !!activeGroupId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('group_id', activeGroupId)
+        .eq('group_id', activeGroupId!)
         .order('created_at', { ascending: true });
 
       if (error) {
         handleDatabaseError(error, 'fetch messages');
-        return [];
+        return [] as any[];
       }
       
       // Mark as read (only messages not sent by me)
-      if (data.length > 0) {
+      if (data && data.length > 0) {
         const unread = data.filter(m => !m.is_read && m.sender_id !== profile?.id);
         if (unread.length > 0) {
           await supabase
@@ -259,11 +259,11 @@ function ChatPage() {
         }
       }
       
-      return data;
+      return data as any[];
     },
   });
 
-  const { data: announcements = [] } = useQuery({
+  const { data: announcements = [] as any[] } = useQuery({
     queryKey: ['announcements', profile?.id],
     enabled: !!profile?.id,
     queryFn: async () => {
@@ -273,9 +273,9 @@ function ChatPage() {
         .order('created_at', { ascending: false });
       if (error) {
         handleDatabaseError(error, 'fetch announcements');
-        return [];
+        return [] as any[];
       }
-      return data;
+      return data as any[];
     },
   });
 

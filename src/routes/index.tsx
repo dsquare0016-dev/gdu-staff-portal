@@ -89,14 +89,19 @@ function LoginPage() {
         
         if (error) return null;
         
-        // Fallback/Extra logos from branding_settings if available
-        const { data: bData } = await supabase
-          .from('branding_settings')
-          .select('*')
-          .limit(1)
-          .maybeSingle();
+        // Fallback/Extra logos from branding_settings if available (Robust)
+        try {
+          const { data: bData } = await supabase
+            .from('branding_settings')
+            .select('*')
+            .limit(1)
+            .maybeSingle();
 
-        return { ...(data as any), ...(bData as any) };
+          return { ...(data as any), ...(bData as any) };
+        } catch (e) {
+          console.warn('Legacy branding_settings table issue:', e);
+          return data as any;
+        }
       } catch {
         return null;
       }
@@ -205,7 +210,7 @@ function LoginPage() {
       }
 
       const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-        redirectTo: `${window.location.origin}/dashboard/settings/security`,
+        redirectTo: `https://gdu-portal.mvxwa.org/auth/callback?type=recovery`,
       });
 
       if (error) throw error;
@@ -413,50 +418,14 @@ function LoginPage() {
                 </label>
               </div>
               
-              <Dialog open={isForgotOpen} onOpenChange={setIsForgotOpen}>
-                <DialogTrigger asChild>
-                  <button type="button" className="text-xs font-bold text-[#D4AF37] hover:underline">
-                    Forgot password?
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md rounded-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Reset Password</DialogTitle>
-                    <DialogDescription>
-                      Enter your Email Address or Staff ID to receive a password reset link.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleForgotPassword} className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="forgot-input">Email or Staff ID</Label>
-                      <Input
-                        id="forgot-input"
-                        placeholder="e.g. name@gdu.gov.ng or GDU001"
-                        value={forgotInput}
-                        onChange={(e) => setForgotInput(e.target.value)}
-                        required
-                        className="rounded-full border-[#D4AF37]/20 focus-visible:ring-[#D4AF37]"
-                      />
-                    </div>
-                    <DialogFooter>
-                      <Button 
-                        type="submit" 
-                        disabled={isResetting}
-                        className="w-full rounded-full bg-[#0A1F40] hover:bg-[#0A1F40]/90 text-white font-bold"
-                      >
-                        {isResetting ? (
-                          <div className="flex items-center gap-2">
-                            <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            <span>Sending...</span>
-                          </div>
-                        ) : (
-                          "Send Reset Link"
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <Button 
+                variant="link" 
+                className="px-0 font-bold text-[#D4AF37] h-auto text-xs" 
+                type="button"
+                asChild
+              >
+                <a href="/reset-password">Forgot password?</a>
+              </Button>
             </div>
 
             <Button

@@ -175,37 +175,51 @@ function AttendancePage() {
   const canScan = isSuperAdmin || isAdmin || isICT;
 
   // Fetch departments from database
-  const { data: dbDepartments = [] } = useQuery({
+  const { data: dbDepartments = [] as any[] } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('departments')
         .select('*')
-        .eq('is_active', true)
+        .eq('status', 'active')
         .order('name');
-      if (error) throw error;
-      return data;
+      if (error) {
+        handleDatabaseError(error, 'fetch departments');
+        return [] as any[];
+      }
+      return data as any[];
     },
   });
 
   const departments = ['All Departments', ...dbDepartments.map(d => d.name)];
 
+  // Fetch departments for manual merge
+  const { data: depts = [] } = useQuery({
+    queryKey: ['departments-all'],
+    queryFn: async () => {
+      const { data } = await supabase.from('departments').select('id, name');
+      return data || [];
+    }
+  });
+
   // Fetch attendance from database
-  const { data: attendanceRecords = [], isLoading } = useQuery({
-    queryKey: ['attendance', date?.toISOString().split('T')[0], profile?.id, profile?.role],
+  const { data: attendanceRecords = [] as any[], isLoading } = useQuery({
+    queryKey: ['attendance', date?.toISOString().split('T')[0], profile?.id, profile?.role, depts.length],
     queryFn: async () => {
       const dateStr = date?.toISOString().split('T')[0];
       let query = supabase
         .from('attendance')
         .select(`
           *,
-          staff:staff_records(
+          staff:staff_records!staff_id(
             id,
             full_name,
             email,
             role,
+            user_id,
+            readable_id,
             passport_url,
-            department:departments(name)
+            department_id
           )
         `);
 
@@ -220,10 +234,26 @@ function AttendancePage() {
       
       const { data, error } = await query;
       
-      if (error) throw error;
-      return data;
+      if (error) {
+        handleDatabaseError(error, 'fetch attendance');
+        return [] as any[];
+      }
+
+      // Manual merge with departments
+      const deptMap = (depts || []).reduce((acc: any, d: any) => {
+        acc[d.id] = d;
+        return acc;
+      }, {});
+
+      return (data || []).map((record: any) => {
+        const staff = record.staff;
+        if (staff) {
+          staff.department = staff.department_id ? deptMap[staff.department_id] : null;
+        }
+        return record;
+      });
     },
-    enabled: !!date && !!profile,
+    enabled: !!date && !!profile && depts.length > 0,
   });
 
   const canManageAttendance = canAccess('attendance', 'edit') || canAccess('attendance', 'verify');
@@ -337,7 +367,7 @@ function AttendancePage() {
 
   const { data: branding } = useBranding();
 
-  const handleExport = (format: 'pdf' | 'excel') => {
+  const handleExport = (exportFormat: 'pdf' | 'excel') => {
     const headers = ['Staff Name', 'Department', 'Check In', 'Check Out', 'Status', 'Date'];
     const exportData = filteredAttendance.map(record => ({
       staff_name: record.staff?.full_name || 'N/A',
@@ -348,7 +378,7 @@ function AttendancePage() {
       date: format(new Date(record.date), 'PPP')
     }));
 
-    if (format === 'pdf') {
+    if (exportFormat === 'pdf') {
       exportToPDF({
         data: exportData,
         filename: `Attendance_Report_${date ? format(date, 'yyyy-MM-dd') : 'All'}`,
@@ -655,9 +685,10 @@ function AttendancePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {departments.map((dept) => (
-                          <SelectItem key={dept} value={dept}>
-                            {dept}
+                        <SelectItem value="All Departments">All Departments</SelectItem>
+                        {(dbDepartments || []).map((dept: any) => (
+                          <SelectItem key={dept.id || dept.name} value={dept.name}>
+                            {dept.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

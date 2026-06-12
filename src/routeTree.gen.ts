@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UpdatePasswordRouteImport } from './routes/update-password'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardStaffRouteImport } from './routes/dashboard/staff'
@@ -26,6 +28,7 @@ import { Route as DashboardAttendanceRouteImport } from './routes/dashboard/atte
 import { Route as DashboardAnnouncementsRouteImport } from './routes/dashboard/announcements'
 import { Route as DashboardAllowancesRouteImport } from './routes/dashboard/allowances'
 import { Route as DashboardAiAssistantRouteImport } from './routes/dashboard/ai-assistant'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as DashboardSettingsIndexRouteImport } from './routes/dashboard/settings/index'
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
 import { Route as DashboardSettingsRolesRouteImport } from './routes/dashboard/settings/roles'
@@ -35,6 +38,16 @@ import { Route as DashboardSettingsExportRouteImport } from './routes/dashboard/
 import { Route as DashboardSettingsBrandingRouteImport } from './routes/dashboard/settings/branding'
 import { Route as DashboardSettingsAuditLogsRouteImport } from './routes/dashboard/settings/audit-logs'
 
+const UpdatePasswordRoute = UpdatePasswordRouteImport.update({
+  id: '/update-password',
+  path: '/update-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -120,6 +133,11 @@ const DashboardAiAssistantRoute = DashboardAiAssistantRouteImport.update({
   path: '/dashboard/ai-assistant',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardSettingsIndexRoute = DashboardSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -168,6 +186,9 @@ const DashboardSettingsAuditLogsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/update-password': typeof UpdatePasswordRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
   '/dashboard/allowances': typeof DashboardAllowancesRoute
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
@@ -195,6 +216,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/update-password': typeof UpdatePasswordRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
   '/dashboard/allowances': typeof DashboardAllowancesRoute
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
@@ -222,6 +246,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/update-password': typeof UpdatePasswordRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/dashboard/ai-assistant': typeof DashboardAiAssistantRoute
   '/dashboard/allowances': typeof DashboardAllowancesRoute
   '/dashboard/announcements': typeof DashboardAnnouncementsRoute
@@ -251,6 +278,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/reset-password'
+    | '/update-password'
+    | '/auth/callback'
     | '/dashboard/ai-assistant'
     | '/dashboard/allowances'
     | '/dashboard/announcements'
@@ -278,6 +308,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/reset-password'
+    | '/update-password'
+    | '/auth/callback'
     | '/dashboard/ai-assistant'
     | '/dashboard/allowances'
     | '/dashboard/announcements'
@@ -304,6 +337,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/reset-password'
+    | '/update-password'
+    | '/auth/callback'
     | '/dashboard/ai-assistant'
     | '/dashboard/allowances'
     | '/dashboard/announcements'
@@ -332,6 +368,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  UpdatePasswordRoute: typeof UpdatePasswordRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   DashboardAiAssistantRoute: typeof DashboardAiAssistantRoute
   DashboardAllowancesRoute: typeof DashboardAllowancesRoute
   DashboardAnnouncementsRoute: typeof DashboardAnnouncementsRoute
@@ -352,6 +391,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/update-password': {
+      id: '/update-password'
+      path: '/update-password'
+      fullPath: '/update-password'
+      preLoaderRoute: typeof UpdatePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -471,6 +524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAiAssistantRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/settings/': {
       id: '/dashboard/settings/'
       path: '/'
@@ -557,6 +617,9 @@ const DashboardSettingsRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  UpdatePasswordRoute: UpdatePasswordRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   DashboardAiAssistantRoute: DashboardAiAssistantRoute,
   DashboardAllowancesRoute: DashboardAllowancesRoute,
   DashboardAnnouncementsRoute: DashboardAnnouncementsRoute,

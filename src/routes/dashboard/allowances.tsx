@@ -18,6 +18,7 @@ import {
   Loader2,
   Trash2,
   Save,
+  FileText,
 } from 'lucide-react';
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,6 +36,14 @@ import {
   DialogFooter,
   DialogDescription
 } from '@/components/ui/dialog';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export const Route = createFileRoute('/dashboard/allowances')({
@@ -50,6 +59,51 @@ function AllowancesPage() {
   const canManage = isSuperAdmin || isAccounts || isAdmin || isTechnicalAssistant;
   
   const { data: branding } = useBranding();
+
+  // Fetch departments for merge - MOVED UP to avoid ReferenceError
+  const { data: allDepts = [] } = useQuery({
+    queryKey: ['departments-all'],
+    queryFn: async () => {
+      const { data } = await supabase.from('departments').select('id, name');
+      return data || [];
+    }
+  });
+
+  const { data: allowances = [], isLoading } = useQuery({
+    queryKey: ['allowances', allDepts.length],
+    queryFn: async () => {
+      // 1. Fetch allowances with staff
+      let query = supabase
+        .from('allowances')
+        .select('*, staff_records:staff_id(full_name, readable_id, department_id)')
+        .order('created_at', { ascending: false });
+
+      if (!isSuperAdmin && !isAccounts && !isAdmin && !isTechnicalAssistant) {
+        query = query.eq('staff_id', profile?.staff_id);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        handleDatabaseError(error, 'fetch allowances');
+        return [];
+      }
+
+      // 2. Manual merge with departments
+      const deptMap = (allDepts || []).reduce((acc: any, d: any) => {
+        acc[d.id] = d;
+        return acc;
+      }, {});
+
+      return (data || []).map((item: any) => {
+        const staff = item.staff_records;
+        if (staff) {
+          staff.department = staff.department_id ? deptMap[staff.department_id] : null;
+        }
+        return item;
+      });
+    },
+    enabled: !!profile && allDepts.length > 0,
+  });
 
   const handleExport = (formatType: 'pdf' | 'excel') => {
     const headers = ['Staff Name', 'Staff ID', 'Type', 'Amount', 'Month/Year', 'Date', 'Status'];
@@ -81,27 +135,6 @@ function AllowancesPage() {
       });
     }
   };
-
-  const { data: allowances = [], isLoading } = useQuery({
-    queryKey: ['allowances'],
-    queryFn: async () => {
-      let query = supabase
-        .from('allowances')
-        .select('*, staff_records:staff_id(full_name, readable_id)')
-        .order('created_at', { ascending: false });
-
-      if (!isSuperAdmin && !isAccounts && !isDirector && !isAdmin) {
-        query = query.eq('staff_id', profile?.staff_id);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        handleDatabaseError(error, 'fetch allowances');
-        return [];
-      }
-      return data;
-    },
-  });
 
   const { data: staffList = [] } = useQuery({
     queryKey: ['staff-list'],

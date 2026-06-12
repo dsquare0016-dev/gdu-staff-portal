@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { DashboardLayout } from '@/components/layout';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -10,6 +9,7 @@ import { handleDatabaseError, handlePortalNotification } from '@/lib/error-handl
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -35,6 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -70,12 +71,17 @@ import {
   Shield,
   CheckCircle,
   Loader2,
+  FileText,
+  ShieldAlert,
+  Key,
+  RefreshCcw,
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 import { createClient } from '@supabase/supabase-js';
 import { exportToPDF, exportToExcel } from '@/lib/utils/export';
 import { useBranding } from '@/lib/hooks/use-branding';
+import { PortalLoader } from '@/components/ui/portal-loader';
 import { format } from 'date-fns';
 
 import { generateNextStaffId } from '@/lib/utils/staff-id';
@@ -133,6 +139,11 @@ function StaffManagementPage() {
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedStaffDetails, setSelectedStaffDetails] = useState<any>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const handleRoleUpdate = (staff: any, newRole: string) => {
     updateStaffRoleMutation.mutate({
@@ -141,17 +152,101 @@ function StaffManagementPage() {
       newRole
     });
     setIsRoleDialogOpen(false);
-   };
+  };
+
+  const handleResetToDefault = async (staff: any) => {
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase.functions.invoke('admin-auth', {
+        body: { action: 'reset-password', userId: staff.user_id, password: 'GDU@123' }
+      });
+
+      if (error) throw error;
+      
+      toast.success('Password reset to GDU@123 successfully!');
+      setIsResetDialogOpen(false);
+    } catch (error: any) {
+      toast.error('Failed to reset password: ' + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase.functions.invoke('admin-auth', {
+        body: { action: 'reset-password', userId: selectedStaffDetails.user_id, password: newPassword }
+      });
+
+      if (error) throw error;
+      
+      toast.success(`Password updated for ${selectedStaffDetails.full_name}`);
+      setIsPasswordDialogOpen(false);
+      setNewPassword('');
+    } catch (error: any) {
+      toast.error('Failed to change password: ' + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleSendRecoveryEmail = async (email: string) => {
+    setIsUpdating(true);
+    try {
+      const { error } = await supabase.functions.invoke('admin-auth', {
+        body: { action: 'send-recovery', email }
+      });
+
+      if (error) throw error;
+      toast.success('Password recovery email sent!');
+    } catch (error: any) {
+      toast.error('Failed to send email: ' + error.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const toggleStaffStatus = async (staff: any) => {
+    const newStatus = staff.status === 'active' ? 'inactive' : 'active';
+    try {
+      const { error: staffError } = await supabase
+        .from('staff_records')
+        .update({ status: newStatus })
+        .eq('id', staff.id);
+      
+      if (staffError) throw staffError;
+
+      if (staff.user_id) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ is_active: newStatus === 'active' })
+          .eq('id', staff.user_id);
+        
+        if (profileError) throw profileError;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['staff-records'] });
+      toast.success(`Staff ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+    } catch (error: any) {
+      toast.error('Failed to update status: ' + error.message);
+    }
+  };
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
-   const { data: dbDepartments = [] } = useQuery({
+  const { data: dbDepartments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('departments')
-        .select('*')
-        .eq('is_active', true)
+        .select('id, name')
+        .eq('status', 'active')
         .order('name');
       if (error) {
         handleDatabaseError(error, 'fetch departments');
@@ -164,15 +259,12 @@ function StaffManagementPage() {
   const departments = ['All Departments', ...(dbDepartments || []).map(d => d.name)];
 
   // Fetch staff from database
-  const { data: staffRecords = [], isLoading } = useQuery({
-    queryKey: ['staff-records'],
+  const { data: staffRecordsRaw = [], isLoading } = useQuery({
+    queryKey: ['staff-records-raw'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('staff_records')
-        .select(`
-          *,
-          department:departments(name)
-        `)
+        .select('*')
         .order('full_name');
       if (error) {
         handleDatabaseError(error, 'fetch staff records');
@@ -182,12 +274,33 @@ function StaffManagementPage() {
     },
   });
 
+  // Manual merge of staff and departments
+  const staffRecords = useMemo(() => {
+    return (staffRecordsRaw || []).map(staff => ({
+      ...staff,
+      department: (dbDepartments || []).find(d => d.id === staff.department_id) || null
+    }));
+  }, [staffRecordsRaw, dbDepartments]);
+
   const deleteStaffMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (staff: any) => {
+      // 1. Delete Auth User if user_id exists
+      if (staff.user_id) {
+        const { error: authError } = await supabase.functions.invoke('admin-auth', {
+          body: { action: 'delete-user', userId: staff.user_id }
+        });
+        if (authError) {
+          console.warn('[Staff] Auth user deletion failed:', authError.message);
+          // Continue with record deletion even if auth deletion fails
+        }
+      }
+
+      // 2. Delete staff record
       const { error } = await supabase
         .from('staff_records')
         .delete()
-        .eq('id', id);
+        .eq('id', staff.id);
+      
       if (error) throw error;
     },
     onSuccess: () => {
@@ -205,7 +318,7 @@ function StaffManagementPage() {
       full_name: staff.full_name,
       staff_id: staff.readable_id || 'N/A',
       email: staff.email,
-      department: staff.department?.name || 'N/A',
+      department: typeof staff.department === 'object' ? staff.department?.name : (staff.department || 'N/A'),
       role: staff.role.toUpperCase(),
       status: staff.status.toUpperCase(),
       level: staff.grade_level?.toString() || 'N/A',
@@ -411,9 +524,8 @@ function StaffManagementPage() {
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 text-primary animate-spin mb-4" />
-                    <p className="text-muted-foreground">Loading staff records...</p>
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <PortalLoader message="Loading staff records..." />
                   </div>
                 ) : (
                   <Table>
@@ -504,18 +616,57 @@ function StaffManagementPage() {
                                   <Eye className="mr-2 h-4 w-4" />
                                   View Details
                                 </DropdownMenuItem>
-                                {canManageStaff && (
+                                <DropdownMenuItem 
+                                  className="cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedStaffDetails(staff);
+                                    setIsEditDialogOpen(true);
+                                  }}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Edit Staff
+                                </DropdownMenuItem>
+                                {isSuperAdmin && (
                                   <>
                                     <DropdownMenuItem 
                                       className="cursor-pointer"
                                       onClick={() => {
                                         setSelectedStaffDetails(staff);
-                                        setIsDetailsDialogOpen(true);
+                                        setIsPasswordDialogOpen(true);
                                       }}
                                     >
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      Edit Staff
+                                      <Key className="mr-2 h-4 w-4 text-blue-500" />
+                                      Change Password
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      className="cursor-pointer"
+                                      onClick={() => {
+                                        setSelectedStaffDetails(staff);
+                                        setIsResetDialogOpen(true);
+                                      }}
+                                    >
+                                      <RefreshCcw className="mr-2 h-4 w-4 text-amber-500" />
+                                      Reset to Default
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      className="cursor-pointer"
+                                      onClick={() => handleSendRecoveryEmail(staff.email)}
+                                    >
+                                      <Mail className="mr-2 h-4 w-4 text-primary" />
+                                      Send Recovery Email
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem 
+                                      className="cursor-pointer"
+                                      onClick={() => toggleStaffStatus(staff)}
+                                    >
+                                      <ShieldAlert className={cn("mr-2 h-4 w-4", staff.status === 'active' ? "text-red-500" : "text-green-500")} />
+                                      {staff.status === 'active' ? 'Deactivate User' : 'Activate User'}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {canManageStaff && (
+                                  <>
                                     {isSuperAdmin && (
                                       <DropdownMenuItem 
                                         className="cursor-pointer"
@@ -542,7 +693,7 @@ function StaffManagementPage() {
                                   className="text-destructive focus:text-destructive cursor-pointer"
                                   onClick={() => {
                                     if (confirm(`Are you sure you want to delete ${staff.full_name}?`)) {
-                                      deleteStaffMutation.mutate(staff.id);
+                                      deleteStaffMutation.mutate(staff);
                                     }
                                   }}
                                 >
@@ -628,6 +779,102 @@ function StaffManagementPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Staff Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Staff Member — {selectedStaffDetails?.full_name}</DialogTitle>
+              <DialogDescription>
+                Update details for staff record #{selectedStaffDetails?.id.slice(0, 8)}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedStaffDetails && (
+              <StaffForm 
+                departments={dbDepartments} 
+                availableRoles={availableRoles}
+                initialData={selectedStaffDetails}
+                isEditing={true}
+                onSuccess={() => {
+                  setIsEditDialogOpen(false);
+                  queryClient.invalidateQueries({ queryKey: ['staff-records'] });
+                }} 
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Password Confirmation Dialog */}
+        <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+          <DialogContent className="rounded-3xl border-2">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black uppercase italic tracking-tight">Confirm Password Reset</DialogTitle>
+              <DialogDescription className="font-medium">
+                You are about to reset the password for <span className="text-primary font-bold">{selectedStaffDetails?.full_name}</span> to the default <span className="font-bold underline">GDU@123</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 p-4 bg-red-50 border border-red-100 rounded-2xl flex gap-3 text-red-800 text-xs">
+              <ShieldAlert className="h-5 w-5 shrink-0" />
+              <p className="font-medium">
+                This action will take effect immediately. The user will be able to log in using the default password and should be advised to change it immediately.
+              </p>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setIsResetDialogOpen(false)} className="rounded-xl h-12 font-bold">
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => handleResetToDefault(selectedStaffDetails)} 
+                disabled={isUpdating}
+                className="rounded-xl h-12 font-bold bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200"
+              >
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCcw className="h-4 w-4 mr-2" />}
+                Confirm Reset
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Custom Change Password Dialog */}
+        <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+          <DialogContent className="rounded-3xl border-2">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black uppercase italic tracking-tight">Change User Password</DialogTitle>
+              <DialogDescription className="font-medium">
+                Set a custom password for <span className="text-primary font-bold">{selectedStaffDetails?.full_name}</span>.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input 
+                  id="new-password"
+                  type="text" 
+                  placeholder="Enter new password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="rounded-xl h-12"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground italic">
+                Min length: 6 characters.
+              </p>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setIsPasswordDialogOpen(false)} className="rounded-xl h-12 font-bold">
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleChangePassword} 
+                disabled={isUpdating || !newPassword}
+                className="rounded-xl h-12 font-bold shadow-lg shadow-primary/20"
+              >
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Key className="h-4 w-4 mr-2" />}
+                Update Password
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Staff Details Dialog */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -702,9 +949,9 @@ function StaffManagementPage() {
                         <span className="text-muted-foreground">Gender:</span>
                         <span className="font-medium capitalize">{selectedStaffDetails.gender || 'N/A'}</span>
                       </div>
-                      <div className="flex justify-between border-b pb-1">
+                    <div className="flex justify-between border-b pb-1">
                         <span className="text-muted-foreground">State of Origin:</span>
-                        <span className="font-medium">{selectedStaffDetails.state || 'N/A'}</span>
+                        <span className="font-medium">{selectedStaffDetails.state_of_origin || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between border-b pb-1">
                         <span className="text-muted-foreground">Qualification:</span>
@@ -732,150 +979,179 @@ function StaffManagementPage() {
 function StaffForm({ 
   onSuccess, 
   departments, 
-  availableRoles 
+  availableRoles,
+  initialData,
+  isEditing = false
 }: { 
   onSuccess: () => void;
   departments: any[];
   availableRoles: string[];
+  initialData?: any;
+  isEditing?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    department_id: '',
-    position: '',
-    role: 'staff',
-    grade_level: '8',
-    step: '1',
-    employment_date: new Date().toISOString().split('T')[0],
-    retirement_date: '',
-    adhoc_expiry: '',
-    gender: 'male',
-    date_of_birth: '',
-    qualification: '',
-    address: '',
-    next_of_kin_name: '',
-    next_of_kin_phone: '',
-    next_of_kin_rel: '',
-    passport_url: '',
-    readable_id: '',
+    full_name: initialData?.full_name || '',
+    email: initialData?.email || '',
+    phone: initialData?.phone || '',
+    department_id: initialData?.department_id || '',
+    position: initialData?.position || '',
+    role: initialData?.role || 'staff',
+    grade_level: initialData?.grade_level?.toString() || '8',
+    step: initialData?.step?.toString() || '1',
+    employment_date: initialData?.employment_date || new Date().toISOString().split('T')[0],
+    retirement_date: initialData?.retirement_date || '',
+    adhoc_expiry: initialData?.adhoc_expiry || '',
+    gender: initialData?.gender || 'male',
+    state_of_origin: initialData?.state_of_origin || '',
+    date_of_birth: initialData?.date_of_birth || '',
+    qualification: initialData?.qualification || '',
+    address: initialData?.address || '',
+    next_of_kin_name: initialData?.next_of_kin_name || '',
+    next_of_kin_phone: initialData?.next_of_kin_phone || '',
+    next_of_kin_rel: initialData?.next_of_kin_rel || '',
+    passport_url: initialData?.passport_url || '',
+    readable_id: initialData?.readable_id || '',
   });
 
   useEffect(() => {
-  const fetchNextId = async () => {
-      const nextId = await generateNextStaffId();
-      setFormData(prev => ({ ...prev, readable_id: nextId }));
-    };
-    fetchNextId();
-  }, []);
+    if (!isEditing) {
+      const fetchNextId = async () => {
+        const nextId = await generateNextStaffId();
+        setFormData(prev => ({ ...prev, readable_id: nextId }));
+      };
+      fetchNextId();
+    }
+  }, [isEditing]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      const password = generateSecurePassword();
       const email = formData.email.trim().toLowerCase();
-      
-      // 1. Create Auth User without logging out the admin
-      // We use a separate client without persistence
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false }
-      });
 
-      console.log('[Staff] Step 1: Creating auth user...');
-      const { data: authData, error: authError } = await authClient.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
+      if (isEditing) {
+        // 1. Update Profile
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
             full_name: formData.full_name,
-            role: formData.role,
+            email: email,
+            role: formData.role as any,
+            avatar_url: formData.passport_url,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', initialData.user_id);
+
+        if (profileError) throw profileError;
+
+        // 2. Update Staff Record
+        const staffUpdate = {
+          full_name: formData.full_name.trim(),
+          email: email,
+          role: formData.role,
+          phone: formData.phone.trim(),
+          position: formData.position.trim(),
+          department_id: formData.department_id,
+          grade_level: parseInt(formData.grade_level),
+          step: parseInt(formData.step),
+          gender: formData.gender,
+          state_of_origin: formData.state_of_origin,
+          date_of_birth: formData.date_of_birth || null,
+          employment_date: formData.employment_date || null,
+          retirement_date: formData.retirement_date || null,
+          adhoc_expiry: formData.role === 'adhoc' ? formData.adhoc_expiry : null,
+          qualification: formData.qualification.trim(),
+          address: formData.address.trim(),
+          passport_url: formData.passport_url,
+          updated_at: new Date().toISOString()
+        };
+
+        const { error: staffError } = await supabase
+          .from('staff_records')
+          .update(staffUpdate)
+          .eq('id', initialData.id);
+
+        if (staffError) throw staffError;
+
+        toast.success('Staff record updated successfully');
+      } else {
+        const password = "GDU@123";
+        // 1. Create Auth User using Edge Function to avoid email confirmation and allow admin to create directly
+        const { data: authData, error: authError } = await supabase.functions.invoke('admin-auth', {
+          body: { 
+            action: 'register-staff', 
+            email, 
+            password,
+            fullName: formData.full_name,
+            role: formData.role
           }
+        });
+
+        if (authError) {
+          // Check for structured error from Edge Function
+          const errorBody = authError.message ? JSON.parse(authError.message) : {};
+          if (errorBody.code === 'user_already_exists') {
+             throw new Error("User email already exists. Use edit staff instead.");
+          }
+          throw authError;
         }
-      });
+        
+        if (!authData || authData.error) {
+           throw new Error(authData?.error || 'Failed to create user account');
+        }
 
-      if (authError) {
-        console.error('[Staff] Auth creation error:', authError);
-        throw new Error(`Failed to create user account: ${authError.message}`);
-      }
+        const userId = authData.user.id;
 
-      if (!authData.user) {
-        throw new Error('Failed to create user account - no user returned');
-      }
+        // 2. Insert staff record
+        const insertData = {
+          user_id: userId,
+          full_name: formData.full_name.trim(),
+          email: email,
+          role: formData.role || 'staff',
+          status: 'active',
+          readable_id: formData.readable_id.trim(),
+          phone: formData.phone.trim(),
+          position: formData.position.trim(),
+          department_id: formData.department_id || null,
+          grade_level: parseInt(formData.grade_level) || null,
+          step: parseInt(formData.step) || null,
+          gender: formData.gender,
+          state_of_origin: formData.state_of_origin,
+          date_of_birth: formData.date_of_birth || null,
+          employment_date: formData.employment_date || null,
+          retirement_date: formData.retirement_date || null,
+          adhoc_expiry: (formData.role === 'adhoc' && formData.adhoc_expiry) ? formData.adhoc_expiry : null,
+          qualification: formData.qualification.trim(),
+          address: formData.address.trim(),
+          passport_url: formData.passport_url,
+        };
 
-      const userId = authData.user.id;
-      console.log('[Staff] Auth user created:', userId);
+        const { error: staffError } = await supabase
+          .from('staff_records')
+          .insert([insertData]);
 
-      // 2. Build a precise insert payload — only columns confirmed to exist in staff_records
-      const insertData: Record<string, any> = {
-        user_id: userId,
-        full_name: formData.full_name.trim(),
-        email: email,
-        role: formData.role || 'staff',
-        status: 'active',
+        if (staffError) throw staffError;
 
-        // Optional text fields
-        ...(formData.phone && { phone: formData.phone.trim() }),
-        ...(formData.position && { position: formData.position.trim() }),
-        ...(formData.qualification && { qualification: formData.qualification.trim() }),
-        ...(formData.address && { address: formData.address.trim() }),
-        ...(formData.gender && { gender: formData.gender }),
-        ...(formData.passport_url && { passport_url: formData.passport_url }),
-        ...(formData.next_of_kin_name && { next_of_kin_name: formData.next_of_kin_name.trim() }),
-        ...(formData.next_of_kin_phone && { next_of_kin_phone: formData.next_of_kin_phone.trim() }),
-        ...(formData.next_of_kin_rel && { next_of_kin_rel: formData.next_of_kin_rel.trim() }),
-        ...(formData.readable_id && { readable_id: formData.readable_id.trim() }),
+        // 3. Send welcome email
+        sendWelcomeEmail({
+          fullName: formData.full_name,
+          staffId: formData.readable_id,
+          email: formData.email,
+          password: password,
+          role: formData.role,
+          portalUrl: window.location.origin,
+        }).catch(console.warn);
 
-        // Numeric fields
-        ...(formData.grade_level && { grade_level: parseInt(formData.grade_level as string) || null }),
-        ...(formData.step && { step: parseInt(formData.step as string) || null }),
-
-        // Date fields
-        employment_date: formData.employment_date || null,
-        date_of_birth: formData.date_of_birth || null,
-        retirement_date: formData.retirement_date || null,
-        adhoc_expiry: (formData.role === 'adhoc' && formData.adhoc_expiry) ? formData.adhoc_expiry : null,
-
-        // UUID FK
-        department_id: formData.department_id || null,
-      };
-
-      console.log('[Staff] Step 2: Inserting staff record...');
-      const { error: staffError } = await (supabase
-        .from('staff_records') as any)
-        .insert([insertData]);
-
-      if (staffError) {
-        console.error('[Staff] Staff record error:', staffError);
-        throw new Error(staffError.message || 'Failed to save staff record');
+        toast.success(`Staff member registered successfully: ${formData.readable_id}`);
       }
 
       queryClient.invalidateQueries({ queryKey: ['staff-records'] });
-
-      // 3. Send welcome email with credentials
-      console.log('[Staff] Step 3: Sending welcome email...');
-      sendWelcomeEmail({
-        fullName: formData.full_name,
-        staffId: formData.readable_id,
-        email: formData.email,
-        password: password, // Include the generated password
-        role: formData.role,
-        portalUrl: window.location.origin,
-      }).catch((emailErr) => {
-        console.warn('[Staff] Welcome email failed (non-critical):', emailErr);
-      });
-
-      toast.success(`Staff member registered successfully with ID: ${formData.readable_id}`);
       onSuccess();
     } catch (error: any) {
-      console.error('[Staff] handleSubmit error:', error);
-      toast.error(error.message || 'Failed to add staff record. Please try again.');
+      toast.error(error.message || 'Action failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -955,10 +1231,12 @@ function StaffForm({
               <Users className="h-4 w-4" />
               Personal Information
             </h3>
-            <div className="flex items-center gap-2 bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
-              <span className="text-[10px] font-bold text-primary uppercase">Staff ID:</span>
-              <span className="text-xs font-mono font-bold text-primary">{formData.readable_id || 'Generating...'}</span>
-            </div>
+            {!isEditing && (
+              <div className="flex items-center gap-2 bg-primary/5 px-3 py-1 rounded-full border border-primary/10">
+                <span className="text-[10px] font-bold text-primary uppercase">Staff ID:</span>
+                <span className="text-xs font-mono font-bold text-primary">{formData.readable_id || 'Generating...'}</span>
+              </div>
+            )}
           </div>
           <div className="flex flex-col md:flex-row gap-6">
             <div className="space-y-2">
@@ -1030,6 +1308,14 @@ function StaffForm({
                   type="date" 
                   value={formData.date_of_birth} 
                   onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })} 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">State of Origin</label>
+                <Input 
+                  value={formData.state_of_origin} 
+                  onChange={(e) => setFormData({ ...formData, state_of_origin: e.target.value })} 
+                  placeholder="e.g. Kogi"
                 />
               </div>
               <div className="space-y-2">
@@ -1130,6 +1416,7 @@ function StaffForm({
                 value={formData.readable_id} 
                 onChange={(e) => setFormData({ ...formData, readable_id: e.target.value })} 
                 placeholder="e.g. GDU100"
+                disabled={isEditing}
               />
             </div>
           </div>
@@ -1140,7 +1427,7 @@ function StaffForm({
         <Button variant="outline" type="button" onClick={onSuccess}>Cancel</Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Register Staff Member
+          {isEditing ? 'Update Staff Record' : 'Register Staff Member'}
         </Button>
       </div>
     </form>

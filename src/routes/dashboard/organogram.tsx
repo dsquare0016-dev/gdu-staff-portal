@@ -99,19 +99,19 @@ function OrganogramPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState<any>(null);
 
-  const { data: staffList = [] } = useQuery({
+  const { data: staffList = [] as any[] } = useQuery({
     queryKey: ['staff-list'],
     queryFn: async () => {
       const { data, error } = await supabase.from('staff_records').select('*').eq('status', 'active');
       if (error) throw error;
-      return data;
+      return data as any[];
     }
   });
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('departments').select('*').eq('is_active', true);
+      const { data, error } = await supabase.from('departments').select('*').eq('status', 'active');
       if (error) throw error;
       return data;
     }
